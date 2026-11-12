@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CCAR-F 모의시험</title>
 <style>
-/* 시험지형 화면: 위에 출제 조작, 가운데 문제 카드, 아래 질문 창과 진도. 모든 동작은 POST /query 하나로 한다. */
+/* 시험지형 화면: 위에 출제 조작, 가운데 문제 카드, 아래 질문 창과 진도.
+   버튼(출제·채점·진도)은 LLM 없는 경로를, "AI에게 질문"만 POST /query를 쓴다. */
 :root{
   --bg:#f3f5f8; --surface:#fff; --line:#d9dee7; --fg:#1b2130; --muted:#5d6678;
   --accent:#2b59c3; --accent-soft:#e3eafa; --ok:#1d7a4c; --ok-soft:#e0f2e8; --bad:#b4372f; --bad-soft:#f8e4e2; --ai:#7a4fb5; --ai-soft:#efe8f8;
@@ -82,7 +83,15 @@ pre#trace{margin:8px 0 0;background:var(--bg);border:1px solid var(--line);borde
         <option value="4">4 Prompt &amp; Structured Output</option>
         <option value="5">5 Context &amp; Reliability</option>
       </select>
-      <button class="btn" id="new">새 문제</button>
+      <label for="count">문항 수</label>
+      <select id="count">
+        <option value="1">1문제</option>
+        <option value="5">5문제</option>
+        <option value="10" selected>10문제</option>
+        <option value="20">20문제</option>
+        <option value="60">60문제</option>
+      </select>
+      <button class="btn" id="new">시험 시작</button>
       <button class="btn ghost" id="prog">내 진도</button>
       <span id="busy" hidden><span class="spin"></span><span class="tag">응답 대기 중…</span></span>
     </div>
@@ -90,11 +99,16 @@ pre#trace{margin:8px 0 0;background:var(--bg);border:1px solid var(--line);borde
   </section>
 
   <section class="panel" id="quiz" hidden>
-    <div class="tag" id="q-label"></div>
+    <div class="row" style="justify-content:space-between"><span class="tag" id="q-label"></span><span class="tag" id="q-count"></span></div>
     <div class="stem" id="q-stem"></div>
     <div class="choices" id="q-choices"></div>
-    <div class="row"><button class="btn" id="submit" disabled>답안 제출</button><span class="tag" id="q-note"></span></div>
+    <div class="row"><button class="btn" id="submit" disabled>답안 제출</button><button class="btn" id="next" hidden>다음 문제</button><span class="tag" id="q-note"></span></div>
     <div id="result"></div>
+  </section>
+
+  <section class="panel" id="summary" hidden>
+    <strong>시험 결과</strong>
+    <div class="md" id="summary-body"></div>
   </section>
 
   <section class="panel" id="ask" hidden>
@@ -122,6 +136,8 @@ pre#trace{margin:8px 0 0;background:var(--bg);border:1px solid var(--line);borde
 const $ = id => document.getElementById(id);
 const sessionId = "web-" + Math.random().toString(36).slice(2, 10);
 let selected = null, pending = false, graded = false;
+/* 세트 진행 상태: 고른 문항 수, 지금까지 낸 수, 정답 수, 이번 주기에 낸 문항, 틀린 문항 */
+let setTotal = 0, setIndex = 0, setCorrect = 0, seen = [], wrongIds = [], repeated = false;
 
 try { $("uid").value = localStorage.getItem("ccarf_uid") || ""; } catch (e) {}
 if (!$("uid").value) $("uid").value = "user-" + Math.random().toString(36).slice(2, 7);
@@ -175,13 +191,14 @@ function busy(on) {
 }
 function showError(msg) { $("err").textContent = msg; $("err").hidden = !msg; }
 
-async function query(question) {
+/* 서버 호출. 버튼은 LLM을 거치지 않는 /quiz, /grade, /progress를, 질문 창만 /query(AI)를 쓴다. */
+async function api(path, extra) {
   const uid = $("uid").value.trim();
   if (!uid) { showError("사용자 ID를 입력해 주세요."); return null; }
   showError(""); busy(true);
   try {
-    const r = await fetch("/query", { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, user_id: uid, session_id: sessionId }) });
+    const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: uid, session_id: sessionId, ...extra }) });
     if (!r.ok) {
       showError(r.status === 502 ? "모델 서버 응답에 실패했습니다. 잠시 뒤 다시 시도해 주세요. (502)" : `요청을 처리하지 못했습니다. (${r.status})`);
       return null;
@@ -192,6 +209,7 @@ async function query(question) {
   } catch (e) { showError("서버에 연결하지 못했습니다. 서버가 켜져 있는지 확인해 주세요."); return null; }
   finally { busy(false); }
 }
+const query = question => api("/query", { question });
 
 function updateAskHelp() {
   $("ask-help").textContent = pending
@@ -214,19 +232,28 @@ function parseQuiz(text) {
   return { label, note, stem: stem.join(" "), choices };
 }
 
-$("new").onclick = async () => {
+$("new").onclick = () => {
+  setTotal = Number($("count").value); setIndex = 0; setCorrect = 0; seen = []; wrongIds = []; repeated = false;
+  $("summary").hidden = true;
+  nextQuestion();
+};
+
+async function nextQuestion() {
   const dom = $("domain").value;
-  const d = await query(dom ? `Domain ${dom} 문제 내줘` : "문제 내줘");
+  const d = await api("/quiz", { domain: dom ? Number(dom) : null, exclude: seen });
   if (!d) return;
-  $("quiz").hidden = false; $("ask").hidden = false; $("result").innerHTML = ""; $("chat").innerHTML = "";
+  $("quiz").hidden = false; $("ask").hidden = false; $("result").innerHTML = ""; $("chat").innerHTML = ""; $("next").hidden = true;
   if (d.trace.refusal_reason || !d.trace.problem_id) {
-    $("q-label").textContent = ""; $("q-stem").textContent = ""; $("q-choices").innerHTML = ""; $("q-note").textContent = "";
+    $("q-label").textContent = ""; $("q-count").textContent = ""; $("q-stem").textContent = ""; $("q-choices").innerHTML = ""; $("q-note").textContent = "";
     $("result").innerHTML = `<div class="notice md">${md(d.answer)}</div>`; $("submit").disabled = true; pending = false; updateAskHelp(); return;
   }
-  const q = parseQuiz(d.answer);
+  const q = parseQuiz(d.answer), pid = d.trace.problem_id;
+  if (seen.includes(pid)) { repeated = true; seen = []; }   /* 문제 은행을 한 바퀴 돌았으면 새 주기를 시작한다 */
+  seen.push(pid); setIndex += 1;
   selected = null; pending = true; graded = false; updateAskHelp();
-  $("q-label").textContent = `${q.label} · ${d.trace.problem_id}`;
-  $("q-note").textContent = q.note;
+  $("q-label").textContent = `${q.label} · ${pid}`;
+  $("q-count").textContent = `${setIndex} / ${setTotal} · 정답 ${setCorrect}`;
+  $("q-note").textContent = repeated ? "검수된 문항을 모두 풀어서 이미 낸 문항을 다시 냅니다." : "";
   $("q-stem").textContent = q.stem;
   $("q-choices").innerHTML = "";
   for (const k of "ABCD") {
@@ -236,12 +263,26 @@ $("new").onclick = async () => {
     b.onclick = () => { selected = k; document.querySelectorAll(".ch").forEach(x => x.classList.toggle("sel", x === b)); $("submit").disabled = false; };
     $("q-choices").appendChild(b);
   }
-  $("submit").disabled = true;
-};
+  $("submit").hidden = false; $("submit").disabled = true;
+  $("quiz").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+$("next").onclick = () => { if (setIndex < setTotal) nextQuestion(); else showSummary(); };
+
+function showSummary() {
+  const rate = Math.round(100 * setCorrect / setTotal);
+  const lines = [`**${setTotal}문항 중 ${setCorrect}문항 정답 (${rate}%)**`, ""];
+  if (wrongIds.length) { lines.push("**틀린 문항**"); wrongIds.forEach(x => lines.push(`- ${x}`)); }
+  else lines.push("틀린 문항이 없습니다.");
+  lines.push("", '영역별 정답률은 "내 진도"에서 볼 수 있습니다. 실제 시험은 60문항 120분이고 합격선은 환산 점수 720점(100~1,000)입니다.');
+  $("summary-body").innerHTML = md(lines.join(String.fromCharCode(10)));
+  $("summary").hidden = false; $("next").hidden = true;
+  $("summary").scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 $("submit").onclick = async () => {
   if (!selected) return;
-  const d = await query(selected);
+  const d = await api("/grade", { answer: selected });
   if (!d) return;
   const g = d.trace.grading;
   if (!g) { $("result").innerHTML = `<div class="notice md">${md(d.answer)}</div>`; return; }
@@ -251,8 +292,12 @@ $("submit").onclick = async () => {
     if (b.dataset.k === g.correct) b.classList.add("correct");
     else if (b.dataset.k === g.chosen) b.classList.add("wrong");
   });
-  $("submit").disabled = true;
+  $("submit").hidden = true;
   const ok = g.chosen === g.correct;
+  if (ok) setCorrect += 1; else wrongIds.push(d.trace.problem_id);
+  $("q-count").textContent = `${setIndex} / ${setTotal} · 정답 ${setCorrect}`;
+  $("next").textContent = setIndex < setTotal ? "다음 문제" : "결과 보기";
+  $("next").hidden = false;
   let h = `<div class="banner ${ok ? "ok" : "bad"}">${ok ? "✓ 정답입니다" : "✗ 오답입니다"} · 선택 ${g.chosen} / 정답 ${g.correct}</div>`;
   const open = ["문제 의도", "정답인 이유", "오답인 이유"];
   for (const sec of d.answer.split(/\n(?=## )/)) {
@@ -279,7 +324,7 @@ $("ask-form").onsubmit = async e => {
 };
 
 $("prog").onclick = async () => {
-  const d = await query("내 진도 보여줘");
+  const d = await api("/progress", {});
   if (!d) return;
   $("progress").hidden = false; $("progress-body").innerHTML = md(d.answer);
   $("progress").scrollIntoView({ behavior: "smooth", block: "nearest" });

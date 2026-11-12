@@ -20,7 +20,7 @@ data/docs/            공식 문서 스냅샷 + manifest.json
 data/questions.json   검수된 문제 은행
 data/exam_domains.yaml 출제 영역
 evaluation/           test_queries.csv, run_eval.py, 평가 리포트
-web/index.html        시험지형 웹 화면 (GET /, POST /query만 호출)
+web/index.html        시험지형 웹 화면 (GET /). 버튼은 POST /quiz·/grade·/progress, 질문 창은 POST /query
 ```
 
 ## 주고받는 형식 (제출 규약)
@@ -44,6 +44,7 @@ web/index.html        시험지형 웹 화면 (GET /, POST /query만 호출)
     ```
 
 ## 도구와 상태 규칙
+- 화면 버튼 전용 경로 `POST /quiz`, `/grade`, `/progress`는 LLM 없이 도구 코드를 바로 부른다. 응답 형태와 규칙(검수 문항만 출제, 결정적 채점, 본인 진도만, `db_writes`)은 `POST /query`와 같다. 평가는 `POST /query`만 대상으로 한다.
 - 도구 이름은 `search_docs`, `generate_quiz`, `grade_answer`, `get_progress`로 고정한다. `expected_tools` 값과 정확히 같아야 한다.
 - 입력이 답안인지는 LLM이 판단하고 도구를 고른다. 정답 판정은 `grade_answer` 코드가 정답 키와 비교해서 결정적으로 한다.
 - 채점 응답의 `answer`는 코드가 문제 은행의 해설 세트로 템플릿을 채워 만든다. 순서는 채점 결과, 문제·보기 한영 병기, 문제 의도(평가 포인트·함정), 정답인 이유, 보기별 오답인 이유, 학습 포인트, 참고 공식문서(제목·읽을 부분·URL)이다. 채점과 진도 조회에서는 LLM을 호출하지 않는다.

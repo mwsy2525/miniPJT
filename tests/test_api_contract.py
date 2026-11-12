@@ -133,3 +133,27 @@ def test_search_docs_and_invalid_answer(client):
 def test_validation_422_no_db_write(client, tmp_path, body):
     assert client.post("/query", json=body).status_code == 422
     assert not (tmp_path / "p.db").exists()
+
+
+def test_button_routes_work_without_llm(tmp_path, monkeypatch):
+    """화면 버튼 경로(/quiz, /grade, /progress)는 LLM 없이 같은 응답 형태로 동작한다."""
+    from fastapi.testclient import TestClient
+    from src import agent as A, tools as T
+    monkeypatch.setenv("PROGRESS_DB_PATH", str(tmp_path / "p.db"))
+    monkeypatch.setattr(T, "get_llm", lambda: pytest.fail("LLM 호출 발생"))
+    monkeypatch.setattr(A, "get_agent_llm", lambda: pytest.fail("LLM 호출 발생"))
+    c = TestClient(A.app)
+    ids = {"user_id": "u", "session_id": "s"}
+    seen = []
+    for _ in range(len(T._eligible("exam"))):
+        r = c.post("/quiz", json={**ids, "exclude": seen}).json()
+        assert set(r) == {"answer", "contexts", "trace"} and r["contexts"] == [] and r["trace"]["db_writes"] == 1
+        assert r["trace"]["problem_id"] not in seen
+        seen.append(r["trace"]["problem_id"])
+    again = c.post("/quiz", json={**ids, "exclude": seen}).json()["trace"]["problem_id"]
+    assert again in seen and again != seen[-1]  # 다 풀면 직전 문항만 피해서 반복
+    g = c.post("/grade", json={**ids, "answer": "A"}).json()
+    assert g["trace"]["grading"]["chosen"] == "A" and g["trace"]["db_writes"] == 2
+    p = c.post("/progress", json={"user_id": "u"}).json()
+    assert "정답률" in p["answer"] and p["contexts"] == []
+    assert c.post("/quiz", json={"user_id": "u"}).status_code == 422

@@ -152,8 +152,13 @@ def run_query(question: str, user_id: Optional[str], session_id: Optional[str]) 
         else:
             last = out["messages"][-1]
             answer, refusal = T._text(last), None
+    return _response(ctx, answer, refusal)
+
+
+def _response(ctx: T.ToolContext, answer: Optional[str], refusal: Optional[str]) -> dict[str, Any]:
+    """도구 실행 결과를 {answer, contexts, trace} 형태로 조립한다."""
     return {
-        "answer": answer,
+        "answer": answer or "",
         "contexts": [str(c) for c in (ctx.contexts or [])],
         "trace": {
             "tool_calls": ctx.tool_calls,
@@ -164,6 +169,29 @@ def run_query(question: str, user_id: Optional[str], session_id: Optional[str]) 
             "sources": ctx.sources,
         },
     }
+
+
+class QuizRequest(BaseModel):
+    """화면 버튼용 출제 요청. domain은 1~5 또는 null, exclude는 이번 세트에서 이미 낸 문항 ID."""
+
+    user_id: StrictStr = Field(min_length=1)
+    session_id: StrictStr = Field(min_length=1)
+    domain: Optional[int] = Field(None, ge=1, le=5)
+    exclude: list[StrictStr] = Field(default_factory=list, max_length=200)
+
+
+class GradeRequest(BaseModel):
+    """화면 버튼용 채점 요청."""
+
+    user_id: StrictStr = Field(min_length=1)
+    session_id: StrictStr = Field(min_length=1)
+    answer: StrictStr = Field(max_length=20)
+
+
+class ProgressRequest(BaseModel):
+    """화면 버튼용 진도 요청."""
+
+    user_id: StrictStr = Field(min_length=1)
 
 
 app = FastAPI(title="CCAR-F 모의시험 Agent")
@@ -185,3 +213,29 @@ def query(req: QueryRequest) -> dict[str, Any]:
         raise
     except Exception as exc:  # Bedrock·임베딩 오류 등
         raise HTTPException(status_code=502, detail=f"upstream error: {type(exc).__name__}") from exc
+
+
+# 화면 버튼 전용 경로. 의도가 정해진 동작이라 LLM을 거치지 않고 도구 코드를 바로 부른다.
+# 응답 형태와 규칙(검수 문항만 출제, 결정적 채점, 본인 진도만)은 POST /query와 같다.
+@app.post("/quiz", response_model=QueryResponse)
+def quiz(req: QuizRequest) -> dict[str, Any]:
+    """POST /quiz: LLM 없이 generate_quiz를 실행한다."""
+    ctx = T.ToolContext(user_id=req.user_id, session_id=req.session_id)
+    T.run_generate_quiz(ctx, req.domain, "exam", req.exclude)
+    return _response(ctx, ctx.answer, ctx.refusal_reason)
+
+
+@app.post("/grade", response_model=QueryResponse)
+def grade(req: GradeRequest) -> dict[str, Any]:
+    """POST /grade: LLM 없이 grade_answer를 실행한다."""
+    ctx = T.ToolContext(user_id=req.user_id, session_id=req.session_id)
+    T.run_grade_answer(ctx, req.answer)
+    return _response(ctx, ctx.answer, ctx.refusal_reason)
+
+
+@app.post("/progress", response_model=QueryResponse)
+def progress(req: ProgressRequest) -> dict[str, Any]:
+    """POST /progress: LLM 없이 get_progress를 실행한다."""
+    ctx = T.ToolContext(user_id=req.user_id)
+    T.run_get_progress(ctx)
+    return _response(ctx, ctx.answer, ctx.refusal_reason)

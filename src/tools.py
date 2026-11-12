@@ -283,8 +283,12 @@ def _format_quiz(q: dict[str, Any], skipped: bool) -> str:
     return "\n".join(lines)
 
 
-def run_generate_quiz(ctx: ToolContext, domain: Any = None, scope: str = "exam") -> str:
-    """검수된 문제 은행에서 한 문항을 출제하고 대기 문제로 저장한다(db_writes=1)."""
+def run_generate_quiz(ctx: ToolContext, domain: Any = None, scope: str = "exam",
+                      exclude: list[str] | None = None) -> str:
+    """검수된 문제 은행에서 한 문항을 출제하고 대기 문제로 저장한다(db_writes=1).
+
+    exclude는 이번 세트에서 이미 낸 문항 ID다. 남은 문항이 없으면 직전 문항만 피해서 다시 낸다.
+    """
     ctx.record_call("generate_quiz", {"domain": domain, "scope": scope})
     if not ctx.both_ids:
         return ctx.finish("출제에는 user_id와 session_id가 모두 필요합니다. 두 ID를 함께 보내 주세요.", "ID 부족")
@@ -306,6 +310,9 @@ def run_generate_quiz(ctx: ToolContext, domain: Any = None, scope: str = "exam")
         pool = [q for q in pool if q["domain"] == dom]
     if not pool:
         return refuse()
+    if exclude:
+        pool = ([q for q in pool if q["id"] not in exclude]
+                or [q for q in pool if q["id"] != exclude[-1]] or pool)
     q = _get_rng().choice(pool)
     skipped = get_pending(ctx.session_id) is not None
     ctx.db_writes += set_pending(ctx.user_id, ctx.session_id, q["id"])
