@@ -320,11 +320,20 @@ def bank_status_lines() -> list[str]:
     return lines
 
 
-def write_reports(summary: dict[str, Any], res: dict[str, Any]) -> None:
-    """report.json과 report.md를 쓴다(답변과 expected_traits를 나란히 기록)."""
+def next_round() -> int:
+    """evaluation/round{N}_report.md 중 가장 큰 N의 다음 번호를 돌려준다."""
+    nums = [int(m.group(1)) for p in EVAL_DIR.glob("round*_report.md") if (m := re.fullmatch(r"round(\d+)_report\.md", p.name))]
+    return max(nums, default=0) + 1
+
+
+def write_reports(summary: dict[str, Any], res: dict[str, Any], round_no: int | None = None) -> None:
+    """report.json과 report.md(최신 결과)를 쓴다. round_no가 있으면 같은 내용을 round{N}_report.md로도 남긴다."""
     (EVAL_DIR / "report.json").write_text(
         json.dumps({"summary": summary, "results": res["results"]}, ensure_ascii=False, indent=2), encoding="utf-8")
-    L = ["# 평가 리포트", "", f"- 모드: **{summary['mode']}**, 시드 {SEED}, 웹 폴백 off, 실행마다 새 임시 DB"]
+    L = ["# 평가 리포트" + (f" · 라운드 {round_no}" if round_no else ""), "",
+         f"- 모드: **{summary['mode']}**, 시드 {SEED}, 웹 폴백 off, 실행마다 새 임시 DB"]
+    if round_no:
+        L.append(f"- 실행 시각: {time.strftime('%Y-%m-%d %H:%M')}, 모델: {os.environ.get('BEDROCK_MODEL_ID', '-')}")
     if summary["mode"].startswith("offline"):
         L.append("- ⚠️ 가짜 LLM·어휘 검색으로 돌린 하네스 점검 결과다. Bedrock 실측 합격 판정으로 쓰지 않는다.")
     L += ["", "## 요약", f"- 전체 통과: {summary['passed']}/{summary['n']} ({summary['overall']:.0%})",
@@ -346,6 +355,8 @@ def write_reports(summary: dict[str, Any], res: dict[str, Any]) -> None:
         L += [f"### {r['id']} ({r['category']})", f"- 입력: {r['input']}", f"- expected_traits: {r['expected_traits']}",
               "- 답변:", "", "```", r["answer"][:1500], "```", ""]
     (EVAL_DIR / "report.md").write_text("\n".join(L), encoding="utf-8")
+    if round_no:
+        (EVAL_DIR / f"round{round_no}_report.md").write_text("\n".join(L), encoding="utf-8")
 
 
 def main() -> int:
@@ -366,7 +377,7 @@ def main() -> int:
         install_offline_mocks()
     res = run(load_rows(Path(args.csv)))
     summary = summarize(res, args.offline)
-    write_reports(summary, res)
+    write_reports(summary, res, None if args.offline else next_round())  # 라운드 리포트는 실측만 남긴다
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0 if summary["meets_thresholds"] else 1
 
