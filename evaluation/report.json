@@ -16,11 +16,11 @@
     "edge_guardrail_forbidden_violations": 0,
     "db_writes_match_edge_guardrail": 1.0,
     "db_writes_match_all": 1.0,
-    "latency_p95_s": 12.348537300000316,
+    "latency_p95_s": 10.969734500002232,
     "rag_measured": {
       "search_docs_answers": 2,
       "with_sources": 2,
-      "avg_contexts": 4.5,
+      "avg_contexts": 4,
       "note": "측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)"
     },
     "meets_thresholds": true
@@ -59,7 +59,7 @@
           "chunk_id": "batch-processing#prepare-and-create-your-batch"
         }
       ],
-      "latency_s": 1.9
+      "latency_s": 1.913
     },
     {
       "id": "P02",
@@ -89,7 +89,7 @@
           "chunk_id": "agent-sdk-subagents#what-subagents-inherit"
         }
       ],
-      "latency_s": 1.971
+      "latency_s": 1.903
     },
     {
       "id": "P03",
@@ -124,7 +124,7 @@
           "chunk_id": "handle-tool-calls#handling-errors-with-is-error"
         }
       ],
-      "latency_s": 2.018
+      "latency_s": 1.938
     },
     {
       "id": "P04",
@@ -148,7 +148,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.781
+      "latency_s": 2.023
     },
     {
       "id": "P05",
@@ -172,7 +172,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.754
+      "latency_s": 2.048
     },
     {
       "id": "P06",
@@ -196,7 +196,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.367
+      "latency_s": 1.755
     },
     {
       "id": "P07",
@@ -206,7 +206,7 @@
       "http": 200,
       "passed": true,
       "reasons": [],
-      "answer": "[AI 개념 힌트 · 정답을 알려 주지 않으며 채점과 무관합니다]\nAgentic loop의 계속·종료는 반드시 `stop_reason` 필드로 판단해야 합니다.\n\n**핵심 원칙**\n- `stop_reason == \"tool_use\"` → 루프를 **계속** (도구 실행 후 결과를 `tool_result`로 돌려보냄)\n- `stop_reason`이 다른 값(`\"end_turn\"`, `\"max_tokens\"`, `\"stop_sequence\"`, `\"refusal\"`) → 루프를 **종료**\n\n**왜 텍스트 내용으로 판단하면 안 되는가?**\nClaude는 도구를 요청하는 동시에 같은 응답에 짧은 상태 문장(텍스트 블록)을 포함할 수 있습니다. 따라서 \"응답에 텍스트가 있으면 종료\"하거나, 텍스트 안의 특정 문구(\"done\", \"task complete\")를 찾거나, 커스텀 JSON 마커를 심는 방식은 **신뢰할 수 없습니다**. `stop_reason`만이 Claude가 실제로 작업을 마쳤는지 도구 호출을 원하는지를 명확히 알려주는 공식 신호입니다.\n\n**올바른 루프 구조 (의사 코드)**\n```\nwhile stop_reason == \"tool_use\":\n    각 tool_use 블록 실행\n    tool_result를 담아 다음 요청 전송\n# stop_reason이 \"end_turn\" 등이면 루프 탈출 → 최종 답변 처리\n```\n\n정리하면, **`stop_reason`을 키로 삼아 `\"tool_use\"`일 때만 루프를 돌리고, 그 외 값이면 종료**하는 것이 신뢰할 수 있는 agentic loop 설계입니다.\n\n참고 문서:\n- https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works\n- https://code.claude.com/docs/en/agent-sdk/agent-loop\n- https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons",
+      "answer": "[AI 개념 힌트 · 정답을 알려 주지 않으며 채점과 무관합니다]\nAgentic loop(클라이언트 툴 기반)의 종료 기준은 **`stop_reason`** 값으로 판단해야 합니다.\n\n핵심 패턴은 다음과 같습니다:\n\n- **루프를 계속하는 조건**: `stop_reason == \"tool_use\"` → Claude가 툴 호출을 요청한 상태이므로 툴을 실행하고 결과를 돌려줘야 합니다.\n- **루프를 종료하는 조건**: `stop_reason`이 `\"tool_use\"`가 **아닌** 다른 값일 때 — 예: `\"end_turn\"` (정상 완료), `\"max_tokens\"`, `\"stop_sequence\"`, `\"refusal\"` 등.\n\n즉, 루프의 정석적인 구조는:\n\n```\nwhile stop_reason == \"tool_use\":\n    툴 실행 → tool_result 반환 → 다음 요청 전송\n# stop_reason이 \"end_turn\" 등이 되면 루프 종료\n```\n\n**왜 텍스트 내용으로 판단하면 안 되는가?**\nClaude는 툴 호출(`tool_use` 블록)과 텍스트 블록을 **같은 응답에 함께** 포함할 수 있습니다. 따라서 응답에 텍스트가 있다고 해서 루프를 끝내거나, \"done\" 같은 문구를 찾거나, 커스텀 JSON 마커를 파싱하는 방식은 신뢰할 수 없습니다. `stop_reason`만이 Claude가 실제로 작업을 마쳤는지 여부를 명확하게 알려주는 공식 신호입니다.\n\n참고 문서:\n- https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works\n- https://code.claude.com/docs/en/agent-sdk/agent-loop\n- https://code.claude.com/docs/en/hooks",
       "refused": false,
       "refusal_reason": null,
       "tools": [
@@ -223,25 +223,25 @@
         {
           "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
           "doc_path": "platform/how-tool-use-works.md",
+          "chunk_id": "how-tool-use-works#the-server-side-loop"
+        },
+        {
+          "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+          "doc_path": "platform/how-tool-use-works.md",
           "chunk_id": "how-tool-use-works#the-agentic-loop-client-tools"
         },
         {
           "url": "https://code.claude.com/docs/en/agent-sdk/agent-loop",
           "doc_path": "code/agent-sdk-agent-loop.md",
-          "chunk_id": "agent-sdk-agent-loop#control-how-the-loop-runs"
+          "chunk_id": "agent-sdk-agent-loop#handle-the-result"
         },
         {
-          "url": "https://code.claude.com/docs/en/agent-sdk/agent-loop",
-          "doc_path": "code/agent-sdk-agent-loop.md",
-          "chunk_id": "agent-sdk-agent-loop#the-loop-at-a-glance"
-        },
-        {
-          "url": "https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons",
-          "doc_path": "platform/handling-stop-reasons.md",
-          "chunk_id": "handling-stop-reasons#stop-sequence"
+          "url": "https://code.claude.com/docs/en/hooks",
+          "doc_path": "code/cc-hooks.md",
+          "chunk_id": "cc-hooks#agent-hook-configuration"
         }
       ],
-      "latency_s": 12.349
+      "latency_s": 10.97
     },
     {
       "id": "P08",
@@ -251,7 +251,7 @@
       "http": 200,
       "passed": true,
       "reasons": [],
-      "answer": "[AI 답변 · 검수된 해설과 채점 결과를 바꾸지 않습니다]\n공식 문서의 **\"What subagents inherit\"** 섹션이 이 문제의 핵심 근거입니다.\n\n---\n\n## 📄 공식 문서 근거\n\n### 1. 서브에이전트의 컨텍스트는 새로 시작된다\n\n> *\"its context window starts fresh, with no parent conversation\"*\n\n서브에이전트(fork가 아닌 경우)는 **부모의 대화 기록 없이 완전히 새로운 컨텍스트 윈도우**로 시작합니다. 즉, 코디네이터가 웹 검색 서브에이전트로부터 받은 결과물은 합성(synthesis) 서브에이전트에게 **자동으로 전달되지 않습니다.**\n\n---\n\n### 2. Agent tool의 prompt string만이 유일한 전달 수단\n\n> *\"The only content you pass from parent to subagent is the Agent tool's prompt string, so include any file paths, error messages, or decisions the subagent needs directly in that prompt.\"*\n\n부모 → 서브에이전트로 넘길 수 있는 **유일한 수단은 Agent tool의 prompt 문자열**입니다. 문제에서 코디네이터는 `\"Write a report on the topic.\"` 이라는 짧은 프롬프트만 넘겼기 때문에, 웹 검색 결과가 전혀 포함되지 않았습니다.\n\n---\n\n### 3. 공식 문서의 표 (받는 것 vs 받지 못하는 것)\n\n| 서브에이전트가 받는 것 | 서브에이전트가 받지 못하는 것 |\n|---|---|\n| Agent tool의 prompt | **부모의 대화 기록 및 tool results** |\n| 자체 system prompt | 부모의 system prompt |\n| Tool definitions | Preloaded skill content (명시하지 않은 경우) |\n\n표에서 명확히 **\"The parent's conversation history or tool results\"** 는 서브에이전트가 받지 못한다고 명시되어 있습니다. 웹 검색 서브에이전트의 결과(tool result)도 여기에 해당합니다.\n\n---\n\n## ✅ 정답 C가 맞는 이유 요약\n\n| 오해 | 실제 동작 |\n|---|---|\n| 서브에이전트가 부모 기록을 자동 상속 | ❌ 컨텍스트는 항상 fresh하게 시작 |\n| 서브에이전트끼리 메모리 공유 | ❌ 공유 메모리 없음 |\n| **Agent tool prompt에 검색 결과를 직접 포함** | ✅ 이것이 유일한 전달 방법 |\n\n따라서 코디네이터는 웹 검색 서브에이전트의 결과를 **합성 서브에이전트의 Agent tool prompt 안에 직접 삽입**해야 했고, 그렇게 하지 않았기 때문에 보고서가 검색 결과를 무시한 것입니다.\n\n참고 문서:\n- https://code.claude.com/docs/en/agent-sdk/subagents\n- https://code.claude.com/docs/en/mcp\n- https://code.claude.com/docs/en/agent-sdk/overview\n- https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools\n- https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
+      "answer": "[AI 답변 · 검수된 해설과 채점 결과를 바꾸지 않습니다]\n공식 문서의 **\"What subagents inherit\"** 섹션이 이 문제의 핵심 근거입니다.\n\n---\n\n## 📄 공식 문서 근거\n\n### 1. 서브에이전트의 컨텍스트는 항상 새로 시작된다\n\n> *\"Unless the subagent is a fork, its context window starts fresh, with no parent conversation\"*\n\nfork가 아닌 일반 서브에이전트는 **부모의 대화 기록 없이 컨텍스트가 새로 시작**됩니다.\n\n---\n\n### 2. 부모 → 서브에이전트로 전달되는 것은 오직 Agent tool의 prompt string뿐\n\n> *\"The only content you pass from parent to subagent is the Agent tool's prompt string, so include any file paths, error messages, or decisions the subagent needs directly in that prompt.\"*\n\nAgent tool을 호출할 때 넘기는 **prompt 문자열만이 유일한 전달 수단**입니다. 따라서 웹 검색 서브에이전트가 찾은 결과를 synthesis 서브에이전트에게 전달하려면, 코디네이터가 그 내용을 **직접 prompt에 포함**시켜야 합니다.\n\n---\n\n### 3. 공식 문서의 상속 표 (받는 것 vs 받지 못하는 것)\n\n| 서브에이전트가 받는 것 | 서브에이전트가 받지 못하는 것 |\n|---|---|\n| Agent tool의 prompt | **부모의 대화 기록 및 tool 결과** |\n| 자체 system prompt | 부모의 system prompt |\n| Tool 정의 | Preloaded skill content (별도 지정 없으면) |\n\n표에서 명시적으로 **\"The parent's conversation history or tool results\"** 는 서브에이전트에게 전달되지 않는다고 나와 있습니다.\n\n---\n\n## 🔍 문제 상황에 적용하면\n\n| 단계 | 실제 동작 |\n|---|---|\n| 코디네이터가 웹 검색 서브에이전트 실행 | 검색 결과는 코디네이터의 대화 기록에 저장됨 |\n| 코디네이터가 synthesis 서브에이전트를 `\"Write a report on the topic.\"` 으로 호출 | 검색 결과가 prompt에 포함되지 않음 |\n| synthesis 서브에이전트 시작 | 컨텍스트가 새로 시작되어 검색 결과를 전혀 모름 |\n| 보고서 작성 | 검색 결과 없이 작성 → 무시된 것처럼 보임 |\n\n---\n\n## ✅ 올바른 구현 방법\n\n코디네이터가 synthesis 서브에이전트를 호출할 때 prompt에 검색 결과를 직접 포함해야 합니다:\n\n```\n\"Write a report on the topic. \nHere are the search findings: [검색 결과 전체 내용]\"\n```\n\n공식 문서 표현 그대로: *\"include any file paths, error messages, or decisions the subagent needs **directly in that prompt**\"*\n\n참고 문서:\n- https://code.claude.com/docs/en/agent-sdk/subagents\n- https://code.claude.com/docs/en/sub-agents\n- https://code.claude.com/docs/en/claude-directory",
       "refused": false,
       "refusal_reason": null,
       "tools": [
@@ -263,7 +263,7 @@
       "db_writes": 0,
       "expected_db_writes": 0,
       "forbidden_hits": [],
-      "n_contexts": 5,
+      "n_contexts": 4,
       "sources": [
         {
           "url": "https://code.claude.com/docs/en/agent-sdk/subagents",
@@ -271,27 +271,22 @@
           "chunk_id": "agent-sdk-subagents#what-subagents-inherit"
         },
         {
-          "url": "https://code.claude.com/docs/en/mcp",
-          "doc_path": "code/cc-mcp.md",
-          "chunk_id": "cc-mcp#use-mcp-prompts-as-commands"
+          "url": "https://code.claude.com/docs/en/sub-agents",
+          "doc_path": "code/cc-sub-agents.md",
+          "chunk_id": "cc-sub-agents#control-subagent-capabilities"
         },
         {
-          "url": "https://code.claude.com/docs/en/agent-sdk/overview",
-          "doc_path": "code/agent-sdk-overview.md",
-          "chunk_id": "agent-sdk-overview#license-and-terms"
+          "url": "https://code.claude.com/docs/en/sub-agents",
+          "doc_path": "code/cc-sub-agents.md",
+          "chunk_id": "cc-sub-agents#next-steps"
         },
         {
-          "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/define-tools",
-          "doc_path": "platform/define-tools.md",
-          "chunk_id": "define-tools#controlling-claude-s-output"
-        },
-        {
-          "url": "https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works",
-          "doc_path": "platform/how-tool-use-works.md",
-          "chunk_id": "how-tool-use-works#anthropic-schema-tools-client-executed"
+          "url": "https://code.claude.com/docs/en/claude-directory",
+          "doc_path": "code/cc-claude-directory.md",
+          "chunk_id": "cc-claude-directory#kept-until-you-delete-them"
         }
       ],
-      "latency_s": 12.656
+      "latency_s": 14.355
     },
     {
       "id": "N01",
@@ -315,7 +310,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 10.427
+      "latency_s": 7.501
     },
     {
       "id": "N02",
@@ -339,7 +334,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 6.518
+      "latency_s": 6.642
     },
     {
       "id": "N03",
@@ -359,7 +354,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 3.951
+      "latency_s": 4.018
     },
     {
       "id": "E01",
@@ -383,7 +378,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.527
+      "latency_s": 1.457
     },
     {
       "id": "E02",
@@ -407,7 +402,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.461
+      "latency_s": 1.425
     },
     {
       "id": "E03",
@@ -431,7 +426,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.454
+      "latency_s": 1.581
     },
     {
       "id": "E04",
@@ -451,7 +446,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 3.758
+      "latency_s": 3.677
     },
     {
       "id": "G01",
@@ -471,7 +466,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 4.029
+      "latency_s": 4.574
     },
     {
       "id": "G02",
@@ -491,7 +486,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 4.992
+      "latency_s": 5.021
     },
     {
       "id": "G03",
@@ -511,7 +506,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.01
+      "latency_s": 0.004
     },
     {
       "id": "G04",
@@ -531,7 +526,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.004
+      "latency_s": 0.005
     },
     {
       "id": "G05",
@@ -551,7 +546,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 2.711
+      "latency_s": 3.372
     }
   ]
 }
