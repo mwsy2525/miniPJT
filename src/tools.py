@@ -449,7 +449,8 @@ def llm_answer(question: str, passages: list[str], mode: str, extra: str, oos_to
     if mode == "hint":
         rules.append("채점 전 개념 힌트다. 정답 보기나 특정 보기의 정오를 말하지 말고, 막힌 개념만 설명한다.")
     if mode == "followup":
-        rules.append("방금 푼 문항에 대한 후속 질문이다. [CONTEXT]의 검수 해설과 모순되지 않게 답한다.")
+        rules.append("방금 푼 문항에 대한 후속 질문이다. [CONTEXT]의 검수 해설과 모순되지 않게 답한다. "
+                     "[CONTEXT]의 user_chosen은 사용자가 고른 보기, correct_answer는 정답이다.")
     body = f"[QUESTION]\n{question}\n\n[CONTEXT]\n{extra or '(없음)'}\n\n[PASSAGES]\n" + "\n---\n".join(passages)
     llm = get_llm().with_structured_output(SearchAnswer)
     return llm.invoke([SystemMessage(content="\n".join(rules)), HumanMessage(content=body)])
@@ -581,8 +582,11 @@ def run_search_docs(ctx: ToolContext, question: str) -> str:
                 d = retriever.doc_by_path(e["doc_path"])
                 ev_hits.append({"text": t, "doc_path": e["doc_path"], "chunk_id": e["chunk_id"],
                                 "url": d["url"] if d else None})
-        extra = json.dumps({k: followup_q[k] for k in ("stem_en", "intent", "trap", "why_correct", "why_wrong",
-                                                       "learning_points")}, ensure_ascii=False)
+        ctx_q = {k: followup_q[k] for k in ("stem_en", "choices_en", "intent", "trap", "why_correct", "why_wrong",
+                                            "learning_points")}
+        # 채점이 끝난 문항이므로 사용자가 고른 답과 정답을 함께 넘긴다("내가 고른 보기"를 짚어 답하게 함)
+        ctx_q.update(user_chosen=last["chosen"], correct_answer=followup_q["answer"])
+        extra = json.dumps(ctx_q, ensure_ascii=False)
     elif hint:
         extra = json.dumps({"stem_en": pq["stem_en"], "choices_en": pq["choices_en"], "intent": pq["intent"]},
                            ensure_ascii=False)

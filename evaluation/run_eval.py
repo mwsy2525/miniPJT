@@ -302,6 +302,22 @@ def summarize(res: dict[str, Any], offline: bool) -> dict[str, Any]:
     return s
 
 
+def bank_status_lines() -> list[str]:
+    """문제 은행 현황(영역별 검수 문항 수, 근거 부족 영역, study 문항 수)을 리포트 줄로 만든다."""
+    from src import tools as T
+    qs = [q for q in T.load_questions() if q.get("reviewed") is True]
+    lines = ["## 문제 은행 현황", "| 영역 | 근거 부족 | 검수 exam 문항 | 검수 study 문항 |", "|---|---|---|---|"]
+    for d in T.load_domains()["domains"]:
+        n_exam = sum(1 for q in qs if q["domain"] == d["id"] and q["scope"] == "exam")
+        n_study = sum(1 for q in qs if q["domain"] == d["id"] and q["scope"] == "study")
+        gap = {True: "예", False: "아니오"}.get(d.get("evidence_gap"), "미판정")
+        lines.append(f"| Domain {d['id']} {d['name']} | {gap} | {n_exam} | {n_study} |")
+    gaps = [f"Domain {d['id']}" for d in T.load_domains()["domains"] if d.get("evidence_gap") is True]
+    lines.append(f"- 근거 부족 영역: {', '.join(gaps) if gaps else '없음'}")
+    lines.append(f"- study 문항 수: {sum(1 for q in qs if q['scope'] == 'study')}")
+    return lines
+
+
 def write_reports(summary: dict[str, Any], res: dict[str, Any]) -> None:
     """report.json과 report.md를 쓴다(답변과 expected_traits를 나란히 기록)."""
     (EVAL_DIR / "report.json").write_text(
@@ -318,7 +334,7 @@ def write_reports(summary: dict[str, Any], res: dict[str, Any]) -> None:
           f"전체 {summary['db_writes_match_all']:.0%}",
           f"- 응답 시간 p95: {summary['latency_p95_s']:.2f}s (기록만)",
           f"- RAG 지표(기록만): {summary['rag_measured']}",
-          f"- 합격 기준 충족: **{summary['meets_thresholds']}**", "", "## 문항별 결과",
+          f"- 합격 기준 충족: **{summary['meets_thresholds']}**", "", *bank_status_lines(), "", "## 문항별 결과",
           "| id | 범주 | 통과 | 도구 | refusal | db_writes | 사유 |", "|---|---|---|---|---|---|---|"]
     for r in res["results"]:
         L.append(f"| {r['id']} | {r['category']} | {'✅' if r['passed'] else '❌'} | {','.join(r['tools']) or '-'} | "
