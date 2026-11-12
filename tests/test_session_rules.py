@@ -105,3 +105,21 @@ def test_grade_with_other_user_refused(client, tmp_path):
     assert _count(tmp_path, "attempts") == 0
     assert T.get_pending("s")["problem_id"] == q["trace"]["problem_id"]
     assert T.get_pending("s")["user_id"] == "u1"
+
+
+def test_pre_grading_guard_refuses_without_llm(tmp_path, monkeypatch):
+    """대기 문제의 정답·보기 정오를 묻는 질문은 LLM과 도구 없이 코드가 거절하고, 답안 형태 입력은 통과시킨다."""
+    import pytest
+    from src import agent as A, tools as T
+    monkeypatch.setenv("PROGRESS_DB_PATH", str(tmp_path / "p.db"))
+    T.set_pending("u", "s", T.load_questions()[0]["id"])
+    ctx = T.ToolContext(user_id="u", session_id="s")
+    for q in ("A가 왜 정답이야?", "이 문제 정답이 뭐야?", "문제를 한국어로 번역해줘", "B가 맞아?"):
+        assert A._pre_grading_guard(ctx, q), q
+    for q in ("B", "B인 것 같아", "정답은 C", "B가 맞는 것 같아", "agentic loop 개념을 설명해줘"):
+        assert not A._pre_grading_guard(ctx, q), q
+    monkeypatch.setattr(A, "get_agent_llm", lambda: pytest.fail("LLM 호출 발생"))
+    r = A.run_query("A가 왜 정답이야?", "u", "s")
+    assert r["trace"]["tool_calls"] == [] and r["trace"]["refusal_reason"] == "채점 전 해설 요청"
+    assert r["answer"] == A.REFUSAL_TEXT["채점 전 해설 요청"] and T.get_pending("s") is not None
+    assert not A._pre_grading_guard(T.ToolContext(user_id="other", session_id="s"), "A가 왜 정답이야?")

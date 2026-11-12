@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -128,9 +129,38 @@ def _validated_reason(ctx: T.ToolContext, reason: Optional[str]) -> Optional[str
     return reason
 
 
+# 도구 없는 거절의 안내문은 코드가 정한다(LLM이 쓴 문장에 정답 표현 같은 것이 섞이지 않게 한다).
+REFUSAL_TEXT = {
+    "ID 부족": "이 요청에는 user_id와 session_id가 모두 필요합니다(진도 조회는 user_id만 있으면 됩니다). "
+               "빠진 ID를 함께 보내 주세요.",
+    "범위 밖 질문": "Claude·Anthropic과 관계없는 요청이라 답하지 않습니다. "
+                    "Claude 모델, API, Claude Code, MCP, CCAR-F 시험에 대해 물어봐 주세요.",
+    "유출 문제 요청": "실제 시험에 나온 문제는 제공하지 않습니다. 검수된 모의문제로 연습하려면 문제를 요청해 주세요.",
+    "채점 전 해설 요청": "채점 전에는 정답, 보기별 정오, 문제·보기 번역과 해설을 알려 드릴 수 없습니다. "
+                         "답을 A~D로 제출하시면 채점 후 검수 해설을 모두 보여 드립니다. "
+                         "막힌 개념은 개념 질문으로 물어봐 주세요.",
+    "타인 진도 요청": "다른 사용자의 진도는 보여 드릴 수 없습니다. 본인 진도만 조회할 수 있습니다.",
+}
+_QUESTION_FORM = re.compile(r"[?？]|왜|뭐|무엇|알려|설명|번역|해석|why|what|which|translat|explain", re.I)
+
+
+def _pre_grading_guard(ctx: T.ToolContext, question: str) -> bool:
+    """대기 문제가 있는데 그 문제의 정답·보기 정오·번역을 묻는 질문인지 코드로 먼저 확인한다.
+
+    'B가 맞는 것 같아'처럼 답안일 수 있는 입력은 질문 형태가 아니므로 걸러내지 않고 에이전트에 넘긴다.
+    """
+    if not ctx.both_ids:
+        return False
+    pend = T.get_pending(ctx.session_id)
+    return bool(pend and pend["user_id"] == ctx.user_id
+                and _QUESTION_FORM.search(question) and T.is_pre_grading_leak_request(question))
+
+
 def run_query(question: str, user_id: Optional[str], session_id: Optional[str]) -> dict[str, Any]:
     """에이전트를 실행하고 {answer, contexts, trace}를 조립한다."""
     ctx = T.ToolContext(user_id=user_id, session_id=session_id)
+    if _pre_grading_guard(ctx, question):  # LLM과 도구를 거치지 않고 바로 거절한다
+        return _response(ctx, REFUSAL_TEXT["채점 전 해설 요청"], "채점 전 해설 요청")
     pending = bool(T.get_pending(session_id)) if ctx.both_ids else False
     last = T.latest_attempt(session_id) if ctx.both_ids else None
     graded = bool(last and last.get("user_id") == user_id)
@@ -149,6 +179,8 @@ def run_query(question: str, user_id: Optional[str], session_id: Optional[str]) 
         reply = out.get("structured_response")
         if reply is not None:
             answer, refusal = reply.answer, _validated_reason(ctx, reply.refusal_reason)
+            if refusal in REFUSAL_TEXT:
+                answer = REFUSAL_TEXT[refusal]
         else:
             last = out["messages"][-1]
             answer, refusal = T._text(last), None
