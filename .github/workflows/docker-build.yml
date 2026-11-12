@@ -1,0 +1,46 @@
+name: docker-build
+
+# Dockerfile이 클린 환경에서 빌드되고, 컨테이너가 떠서 LLM 없는 경로가 동작하는지 확인한다.
+# Bedrock 자격증명은 쓰지 않는다(출제·채점·진도 경로와 화면만 확인).
+on:
+  push:
+    branches: [main]
+    paths: [Dockerfile, .dockerignore, requirements.txt, "src/**", "data/**", "web/**", .github/workflows/docker-build.yml]
+  workflow_dispatch:
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t ccarf-mock-exam .
+
+      - name: Run container
+        run: |
+          docker run -d --name app -p 8000:8000 ccarf-mock-exam
+          for i in $(seq 1 30); do
+            curl -fs -o /dev/null http://127.0.0.1:8000/ && break
+            sleep 2
+          done
+          docker logs app
+
+      - name: Smoke test (no LLM)
+        run: |
+          set -e
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/)" = "200"
+          quiz=$(curl -fs -X POST http://127.0.0.1:8000/quiz -H 'Content-Type: application/json' \
+            -d '{"user_id":"ci","session_id":"ci-1"}')
+          echo "$quiz" | python3 -c "import json,sys; r=json.load(sys.stdin); assert set(r)=={'answer','contexts','trace'}; assert r['trace']['db_writes']==1 and r['contexts']==[]; print('quiz ok', r['trace']['problem_id'])"
+          grade=$(curl -fs -X POST http://127.0.0.1:8000/grade -H 'Content-Type: application/json' \
+            -d '{"user_id":"ci","session_id":"ci-1","answer":"A"}')
+          echo "$grade" | python3 -c "import json,sys; r=json.load(sys.stdin); assert r['trace']['grading']['chosen']=='A' and r['trace']['db_writes']==2; print('grade ok')"
+          prog=$(curl -fs -X POST http://127.0.0.1:8000/progress -H 'Content-Type: application/json' -d '{"user_id":"ci"}')
+          echo "$prog" | python3 -c "import json,sys; r=json.load(sys.stdin); assert r['trace']['tool_calls'][0]['name']=='get_progress'; print('progress ok')"
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/query -H 'Content-Type: application/json' -d '{"question":""}')" = "422"
+          echo "validation ok"
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker logs app || true
