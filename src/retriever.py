@@ -221,34 +221,96 @@ def url_allowed(url: str) -> bool:
     return any(host == d or host.endswith("." + d) for d in allowed_domains())
 
 
-def web_search(query: str, k: int = 3) -> list[dict[str, Any]]:
-    """허용 도메인 공식 문서 페이지를 실시간 조회한다. 결과는 {text, url, doc_path: None, chunk_id: None}.
+_INDEX_LINE = re.compile(r"^\s*-\s*\[([^\]]+)\]\((https?://[^)\s]+)\)\s*(?:[-:]\s*(.*))?$")
+_WEB_STOP = {"the", "and", "for", "with", "what", "how", "you", "your", "claude", "anthropic", "docs", "use", "using"}
+_index_cache: dict[str, Any] = {"at": 0.0, "pages": []}
 
-    저장하지 않는다. 비활성·키 없음·타임아웃·오류는 모두 빈 목록(=근거 부족)으로 처리한다.
+
+def index_urls() -> list[str]:
+    """공식 사이트가 공개하는 문서 목록 파일(llms.txt) 주소(.env WEB_INDEX_URLS, 기본은 허용 도메인 3곳)."""
+    env = _env("WEB_INDEX_URLS")
+    if env:
+        return [u.strip() for u in env.split(",") if u.strip()]
+    return ["https://platform.claude.com/llms.txt", "https://code.claude.com/docs/llms.txt",
+            "https://modelcontextprotocol.io/llms.txt"]
+
+
+def _web_tokens(text: str) -> set[str]:
+    """영어 소문자 단어 집합(흔한 단어 제외)."""
+    return {t for t in re.findall(r"[a-z][a-z0-9_]{2,}", text.lower()) if t not in _WEB_STOP}
+
+
+def _page_url(url: str) -> str:
+    """목록의 .md 주소를 사용자에게 보여 줄 페이지 주소로 바꾼다."""
+    return url[:-3] if url.endswith(".md") else url
+
+
+def load_web_index(get) -> list[dict[str, str]]:
+    """문서 목록 파일을 읽어 {title, url, desc} 목록을 만든다. 1시간 동안 메모리에만 둔다(저장하지 않음)."""
+    import time
+
+    if _index_cache["pages"] and time.time() - _index_cache["at"] < 3600:
+        return _index_cache["pages"]
+    known = manifest_urls()
+    pages: list[dict[str, str]] = []
+    for idx in index_urls():
+        if not url_allowed(idx):
+            continue
+        try:
+            text = get(idx)
+        except Exception:
+            continue
+        for line in text.splitlines():
+            m = _INDEX_LINE.match(line)
+            if not m:
+                continue
+            title, url, desc = m.group(1), m.group(2), m.group(3) or ""
+            if not url_allowed(url) or _page_url(url) in known:
+                continue  # 허용 도메인 밖이거나 이미 스냅샷에 있는 문서
+            if "/docs/" in url and "/docs/en/" not in url and "platform.claude.com" in url:
+                continue  # 영어 문서만
+            pages.append({"title": title, "url": url, "desc": desc})
+    if pages:
+        _index_cache.update(at=time.time(), pages=pages)
+    return pages
+
+
+def web_search(query: str, k: int = 3) -> list[dict[str, Any]]:
+    """API 키 없이 허용 도메인 공식 문서를 실시간 조회한다. 결과는 {text, url, doc_path: None, chunk_id: None}.
+
+    공식 사이트의 문서 목록(llms.txt)에서 검색어와 겹치는 페이지를 고르고, 그 페이지에서 겹침이 큰 구절을 뽑는다.
+    저장하지 않는다. 비활성·타임아웃·오류·일치 없음은 모두 빈 목록(=근거 부족)으로 처리한다.
     """
     if not web_fallback_enabled():
         return []
-    api_key = _env("WEB_SEARCH_API_KEY")
-    if not api_key:
+    qt = _web_tokens(query)
+    if not qt:
         return []
     try:
         import httpx
 
-        resp = httpx.post(
-            _env("WEB_SEARCH_ENDPOINT", "https://api.tavily.com/search"),
-            json={"api_key": api_key, "query": query, "max_results": k * 2,
-                  "include_domains": allowed_domains()},
-            timeout=float(_env("WEB_TIMEOUT_SECONDS", "8")),
-        )
-        resp.raise_for_status()
-        results = resp.json().get("results", [])
+        timeout = float(_env("WEB_TIMEOUT_SECONDS", "8"))
+
+        def get(url: str) -> str:
+            resp = httpx.get(url, timeout=timeout, follow_redirects=False,
+                             headers={"User-Agent": "ccarf-docs-fallback/1.0"})
+            resp.raise_for_status()
+            return resp.text
+
+        pages = load_web_index(get)
+        scored = sorted(((len(qt & _web_tokens(f"{pg['title']} {pg['desc']} {pg['url'].rsplit('/', 1)[-1]}")), pg)
+                         for pg in pages), key=lambda x: -x[0])
+        out: list[tuple[int, dict[str, Any]]] = []
+        for score, pg in scored[:2]:
+            if score == 0 or not url_allowed(pg["url"]):
+                continue
+            body = get(pg["url"])
+            for title, text in split_markdown(body) or [(pg["title"], body)]:
+                hit = len(qt & _web_tokens(title + " " + text))
+                if hit:
+                    out.append((hit, {"text": text[:3000], "url": _page_url(pg["url"]),
+                                      "doc_path": None, "chunk_id": None}))
     except Exception:
         return []
-    out: list[dict[str, Any]] = []
-    for r in results:
-        url, text = r.get("url", ""), (r.get("content") or "").strip()
-        if text and url_allowed(url):
-            out.append({"text": text[:3000], "url": url, "doc_path": None, "chunk_id": None})
-        if len(out) >= k:
-            break
-    return out
+    out.sort(key=lambda x: -x[0])
+    return [h for _, h in out[:k]]

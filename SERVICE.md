@@ -42,7 +42,7 @@
   | `data/questions.json` | 문제 은행 | 실제 검수 대상(초안은 AI 생성 또는 서비스 내 배포가 허용된 외부 연습문제) | 문항마다 `scope`로 구분한다: `exam`(공식 시험 가이드의 Task Statement에 연결된 시험 범위 문항)과 `study`(공식 문서 학습용, 가이드 범위 밖이거나 연결 안 됨). 영어 문제·보기, 한국어 해석, 문제 의도, 보기별 해설, 학습 포인트, 참고 문서, 근거 구절, 검수자·검수일. `bilingual-cert-quiz-solver` 스킬 형식으로 초안을 만들고 사람이 검수해 `reviewed=true`. 스킬 형식의 "영어 문장 분석" 섹션은 저장하지 않는다. 참고 URL은 manifest 안의 것만 쓴다. 목표 약 50문항을 가이드 비중대로 배분(Domain 1~5: 14 / 9 / 10 / 10 / 7) |
   | `data/exam_domains.yaml` | 설정 | 실제(공식 Exam Guide v1.0, 2026년 7월 기준으로 확정) | 5개 출제 영역과 비중(Agentic Architecture & Orchestration 27%, Tool Design & MCP Integration 18%, Claude Code Configuration & Workflows 20%, Prompt Engineering & Structured Output 20%, Context Management & Reliability 15%), 영역별 Task Statement 목록, 6개 시나리오, 가이드 Out-of-Scope 주제 목록, 영역별 근거 부족 여부와 관련 문서 목록. 가이드가 바뀌면 수동으로 갱신한다 |
   | `data/progress.db` | DB(SQLite) | 실제(런타임 생성), 평가 때는 임시 DB | 시도 기록, 세션별 대기 문제 |
-  | Anthropic·MCP 공식 문서(platform.claude.com, code.claude.com, modelcontextprotocol.io) | 외부(웹 폴백) | 실제 | 로컬 근거가 없을 때만 조회, 평가 때는 끔 |
+  | Anthropic·MCP 공식 문서(platform.claude.com, code.claude.com, modelcontextprotocol.io) | 외부(웹 폴백) | 실제 | 로컬 근거가 없을 때만 조회, 평가 때는 끔. 검색 API 키 없이 공식 사이트의 문서 목록(`llms.txt`)에서 맞는 페이지를 골라 읽는다 |
 
 ## 4. 서비스 정책 (가드레일 요약)
 1. **근거 없이 지어내지 않는다.** Claude·Anthropic에 관한 질문은 폭넓게 받는다. 공식 문서 근거가 있으면 그 근거로 답하고, 없으면 "공식 문서 근거 없음 · AI 일반 지식 답변" 표시를 붙여 AI가 아는 범위에서 답한다. AI도 확실히 모르는 내용(없는 기능 등)은 "근거 부족"으로 답하고 지어내지 않는다. Claude·Anthropic과 전혀 관계없는 질문만 "범위 밖 질문"으로 거절하고 범위 안으로 안내한다. 가이드의 Out-of-Scope 주제(임베딩, 프롬프트 캐싱 세부, 스트리밍, 요금 등)는 거절하지 않고 문서 근거로 답하되 "시험 출제 범위 밖" 표시를 붙인다. AI가 쓴 답변(힌트·문제 질의 응답)은 검수 해설·정답 판정·숫자를 바꾸지 않고 표시해 구분한다.

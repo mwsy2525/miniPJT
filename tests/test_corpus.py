@@ -96,34 +96,57 @@ def test_web_fallback_only_when_local_insufficient(monkeypatch):
 def test_web_fallback_off_makes_no_network_call(monkeypatch):
     import httpx
     monkeypatch.setenv("WEB_FALLBACK_ENABLED", "false")
-    monkeypatch.setenv("WEB_SEARCH_API_KEY", "k")
-    monkeypatch.setattr(httpx, "post", lambda *a, **k: pytest.fail("웹 조회 발생"))
-    assert retriever.web_search("q") == []
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: pytest.fail("웹 조회 발생"))
+    assert retriever.web_search("prompt caching") == []
     monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
     ctx = T.ToolContext()
     out = T.run_search_docs(ctx, "tool use?")
     assert ctx.contexts == [] and "근거 부족" in out
 
 
-def test_web_fallback_filters_domains_and_errors(monkeypatch):
+def _fake_site(monkeypatch, pages, fail=None):
+    """httpx.get을 가짜 공식 사이트로 바꾼다. 조회한 URL 목록을 돌려준다."""
     import httpx
-    monkeypatch.setenv("WEB_FALLBACK_ENABLED", "true")
-    monkeypatch.setenv("WEB_SEARCH_API_KEY", "k")
+    seen = []
 
     class R:
+        def __init__(self, text): self.text = text
         def raise_for_status(self): pass
-        def json(self):
-            return {"results": [{"url": "https://evil.example.com/a", "content": "bad"},
-                                {"url": "https://code.claude.com/docs/en/a", "content": "good"}]}
 
-    monkeypatch.setattr(httpx, "post", lambda *a, **k: R())
-    assert [r["url"] for r in retriever.web_search("q")] == ["https://code.claude.com/docs/en/a"]
+    def get(url, **kw):
+        seen.append(url)
+        if fail:
+            raise fail
+        return R(pages[url])
 
-    def boom(*a, **k):
-        raise httpx.TimeoutException("t")
+    monkeypatch.setattr(httpx, "get", get)
+    monkeypatch.setitem(retriever._index_cache, "pages", [])
+    return seen
 
-    monkeypatch.setattr(httpx, "post", boom)
-    assert retriever.web_search("q") == []
+
+def test_web_fallback_reads_official_index_without_api_key(monkeypatch):
+    """키 없이 문서 목록에서 페이지를 골라 구절을 가져오고, 허용 도메인 밖 주소는 조회하지 않는다."""
+    monkeypatch.setenv("WEB_FALLBACK_ENABLED", "true")
+    monkeypatch.delenv("WEB_SEARCH_API_KEY", raising=False)
+    monkeypatch.setenv("WEB_INDEX_URLS", "https://code.claude.com/docs/llms.txt,https://evil.example.com/llms.txt")
+    index = ("- [Widgets guide](https://code.claude.com/docs/en/widgets.md): Configure widgets\n"
+             "- [Evil widgets](https://evil.example.com/widgets.md): widgets\n"
+             "- [Memory](https://code.claude.com/docs/en/memory.md): already in snapshot\n")
+    page = "# Widgets\n\n## Configure widgets\nSet widget_mode to enable widgets.\n\n## Other\nNothing here.\n"
+    seen = _fake_site(monkeypatch, {"https://code.claude.com/docs/llms.txt": index,
+                                    "https://code.claude.com/docs/en/widgets.md": page})
+    hits = retriever.web_search("configure widgets widget_mode")
+    assert hits and hits[0]["url"] == "https://code.claude.com/docs/en/widgets"
+    assert "widget_mode" in hits[0]["text"] and hits[0]["doc_path"] is None and hits[0]["chunk_id"] is None
+    assert all("evil.example.com" not in u for u in seen)
+    assert "https://code.claude.com/docs/en/memory.md" not in seen  # 스냅샷에 있는 문서는 다시 받지 않는다
+
+
+def test_web_fallback_timeout_is_empty(monkeypatch):
+    import httpx
+    monkeypatch.setenv("WEB_FALLBACK_ENABLED", "true")
+    _fake_site(monkeypatch, {}, fail=httpx.TimeoutException("t"))
+    assert retriever.web_search("configure widgets") == []
 
 
 def test_general_knowledge_fallback_when_no_evidence(monkeypatch):
