@@ -430,12 +430,17 @@ def llm_rewrite_query(question: str) -> str:
     """[LLM 1] 한국어 질문을 영어 검색어로 바꾼다(실패하면 원문)."""
     try:
         msg = get_llm().invoke([
-            SystemMessage(content="Rewrite the user's question as a concise English search query for Anthropic/Claude "
-                                  "documentation. Output only the query."),
-            HumanMessage(content=question)])
-        return _text(msg).strip() or question
+            SystemMessage(content="You convert text into a search query. Do not answer or reply to the text. "
+                                  "Rewrite it as a concise English search query (at most 12 words) for Anthropic/Claude "
+                                  "documentation. Output only the query on one line."),
+            HumanMessage(content=f"<text>{question}</text>")])
+        out = _text(msg).strip()
     except Exception:
         return question
+    # 검색어가 아니라 대화문이 나오면(한글·여러 줄·너무 긴 출력) 원문으로 검색한다
+    if not out or "\n" in out or len(out) > 200 or re.search(r"[가-힣]", out):
+        return question
+    return out
 
 
 def llm_answer(question: str, passages: list[str], mode: str, extra: str, oos_topics: list[str]) -> SearchAnswer:

@@ -9,8 +9,8 @@
 - 과잉 거절(positive): 0
 - edge·guardrail forbidden 위반: 0
 - db_writes 일치율: edge·guardrail 100%, 전체 100%
-- 응답 시간 p95: 10.61s (기록만)
-- RAG 지표(기록만): {'search_docs_answers': 2, 'with_sources': 2, 'avg_contexts': 2.5, 'note': '측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)'}
+- 응답 시간 p95: 11.85s (기록만)
+- RAG 지표(기록만): {'search_docs_answers': 2, 'with_sources': 2, 'avg_contexts': 4.5, 'note': '측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)'}
 - 합격 기준 충족: **True**
 
 ## 문제 은행 현황
@@ -210,14 +210,23 @@ Agentic loop의 계속·종료는 **`stop_reason`** 값으로 판단해야 합�
 
 핵심 패턴은 다음과 같습니다:
 
-- **루프 계속 조건**: `stop_reason == "tool_use"` → Claude가 도구 호출을 요청한 것이므로, 도구를 실행하고 결과를 `tool_result`로 돌려보낸 뒤 루프를 반복합니다.
-- **루프 종료 조건**: `stop_reason`이 `"tool_use"`가 **아닌** 다른 값일 때 — 즉 `"end_turn"`, `"max_tokens"`, `"stop_sequence"`, `"refusal"` 중 하나가 되면 루프를 종료합니다.
+- **루프 계속 조건**: `stop_reason == "tool_use"` → Claude가 도구 호출을 요청한 상태이므로 도구를 실행하고 결과를 돌려보낸 뒤 루프를 반복합니다.
+- **루프 종료 조건**: `stop_reason`이 `"tool_use"`가 **아닌** 경우 (`"end_turn"`, `"max_tokens"`, `"stop_sequence"`, `"refusal"` 등) → Claude가 최종 답변을 생성했거나 다른 이유로 멈춘 것이므로 루프를 종료합니다.
 
-이 방식이 신뢰할 수 있는 이유는, Claude가 같은 응답에서 텍스트 블록과 도구 호출을 **동시에** 포함할 수 있기 때문입니다. 텍스트 내용("done", "task complete" 같은 문구)이나 반복 횟수(5회 제한 등)로 종료를 판단하면, Claude가 아직 도구 호출을 요청 중인데도 루프가 끊기거나 반대로 계속 돌아가는 문제가 생깁니다. `stop_reason`은 API가 명시적으로 제공하는 신호이므로 가장 안정적인 기준입니다.
+```
+while stop_reason == "tool_use":
+    # 도구 실행 후 tool_result 전송
+loop exits on "end_turn" (or other non-tool_use reason)
+```
+
+**왜 텍스트 내용으로 판단하면 안 되는가?**
+Claude는 `stop_reason: "tool_use"` 응답 안에 텍스트 블록과 `tool_use` 블록을 **동시에** 포함할 수 있습니다. 즉, 상태 메시지 같은 텍스트가 있어도 아직 도구 호출이 남아 있을 수 있습니다. 텍스트 존재 여부나 특정 문구("done", "task complete")로 루프를 끊으면 작업이 중간에 잘릴 수 있습니다.
+
+**결론**: 루프 종료의 신뢰할 수 있는 기준은 응답의 **`stop_reason`** 필드이며, `"end_turn"`이 되었을 때 루프를 끝내는 것이 올바른 방법입니다.
 
 참고 문서:
-- https://code.claude.com/docs/en/agent-sdk/agent-loop
 - https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works
+- https://code.claude.com/docs/en/agent-sdk/agent-loop
 - https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons
 ```
 
@@ -238,44 +247,42 @@ Agentic loop의 계속·종료는 **`stop_reason`** 값으로 판단해야 합�
 
 > *"its context window starts fresh, with no parent conversation"*
 
-fork가 아닌 일반 서브에이전트는 **부모의 대화 기록 없이 컨텍스트 윈도우가 새로 시작**됩니다. 즉, 웹 검색 서브에이전트가 찾은 결과는 합성(synthesis) 서브에이전트에게 자동으로 전달되지 않습니다.
+서브에이전트(fork가 아닌 경우)는 **부모의 대화 기록 없이 완전히 새로운 컨텍스트 윈도우**로 시작합니다. 즉, 코디네이터가 웹 검색 서브에이전트로부터 받은 결과물은 합성 서브에이전트에게 **자동으로 전달되지 않습니다.**
 
 ---
 
-### 2. 전달되는 것과 전달되지 않는 것 (공식 표)
+### 2. Agent tool의 prompt string만이 유일한 전달 수단
+
+> *"The only content you pass from parent to subagent is the Agent tool's prompt string, so include any file paths, error messages, or decisions the subagent needs directly in that prompt."*
+
+부모 → 서브에이전트로 넘길 수 있는 **유일한 수단은 Agent tool의 prompt 문자열**입니다. 문제에서 코디네이터는 `"Write a report on the topic."`이라는 짧은 프롬프트만 넘겼기 때문에, 웹 검색 결과가 전혀 포함되지 않았습니다.
+
+---
+
+### 3. 공식 문서의 상속 표
 
 | 서브에이전트가 받는 것 | 서브에이전트가 받지 못하는 것 |
 |---|---|
-| Agent tool의 prompt 문자열 | **부모의 대화 기록 및 tool 결과** |
+| Agent tool의 prompt | **부모의 대화 기록 및 tool results** |
 | 자체 system prompt | 부모의 system prompt |
-| Tool 정의 | Preloaded skill content (별도 지정 없으면) |
+| Tool definitions | Preloaded skill content (명시하지 않으면) |
 
-→ **"The parent's conversation history or tool results"** 가 명시적으로 "받지 못하는 것" 목록에 포함되어 있습니다.
-
----
-
-### 3. 유일한 전달 수단은 prompt 문자열
-
-> *"The only content you pass from parent to subagent is the Agent tool's prompt string, so include any file paths, error messages, or decisions the subagent needs **directly in that prompt**."*
-
-코디네이터가 서브에이전트에게 정보를 넘기는 **유일한 방법은 Agent tool의 prompt 문자열**입니다. 이 문제에서 synthesis 서브에이전트의 prompt가 `"Write a report on the topic."` 뿐이었으므로, 웹 검색 결과가 전혀 포함되지 않아 보고서가 검색 내용을 무시한 것입니다.
+표에서 명확히 **"The parent's conversation history or tool results"** 는 서브에이전트가 받지 못한다고 명시되어 있습니다. 웹 검색 서브에이전트의 결과는 코디네이터 입장에서 "tool result"에 해당하므로, 합성 서브에이전트에게 자동 전달되지 않습니다.
 
 ---
 
 ## ✅ 정답 C가 맞는 이유 요약
 
-- 서브에이전트는 부모의 대화 기록을 **자동 상속하지 않음** (공식 문서 명시)
-- 앞선 서브에이전트(웹 검색)의 결과는 **코디네이터가 직접 prompt에 포함**시켜야 함
-- `"Write a report on the topic."` 만으로는 검색 결과가 전달되지 않음
+| 단계 | 설명 |
+|---|---|
+| 웹 검색 서브에이전트 실행 | 검색 결과를 코디네이터에게 반환 |
+| 코디네이터가 합성 서브에이전트 호출 | `"Write a report on the topic."` 만 전달 |
+| 합성 서브에이전트 컨텍스트 | 검색 결과 없이 새로 시작 → 보고서에 반영 불가 |
 
-## ❌ 오답 근거
-
-- **A**: 공유 메모리(Read tool로 접근 가능한)라는 개념 자체가 존재하지 않음
-- **B**: `max_tokens`는 출력 길이 제한이며, 애초에 입력에 없는 정보를 생성할 수 없음
-- **D**: 공식 문서에 따르면 같은 턴에 생성해도 서브에이전트끼리 컨텍스트를 공유하지 않음 — 같은 턴 생성은 **병렬 실행**을 위한 것일 뿐
+**해결책**: 코디네이터가 웹 검색 결과를 Agent tool의 prompt string에 직접 포함시켜야 합니다. 예: `"Here are the search findings: [결과 내용]. Write a report on the topic."`
 
 참고 문서:
-- https://code.claude.com/docs/en/agent-s
+- https://code.claude.c
 ```
 
 ### N01 (negative)

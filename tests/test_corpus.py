@@ -5,6 +5,8 @@ import pytest
 
 from src import retriever, tools as T
 
+_REAL_REWRITE = T.llm_rewrite_query  # 아래 autouse fixture가 바꾸기 전의 실제 함수
+
 
 @pytest.fixture(autouse=True)
 def _mocks(tmp_path, monkeypatch):
@@ -179,6 +181,17 @@ def test_unknown_identifier_in_passages_is_evidence_gap(monkeypatch):
     assert ctx.refusal_reason == "근거 부족" and ctx.contexts == []
     assert ctx.tool_calls[-1]["args"]["missing_terms"] == ["quantum-entangle"]
     assert T.missing_identifier_terms("--output-format 옵션 알려줘", [hit["text"]]) == []
+
+
+def test_query_rewrite_rejects_chat_reply(monkeypatch):
+    """검색어 변환 LLM이 검색어 대신 한국어 대화문을 내면 원문 질문으로 검색한다."""
+    class FakeLLM:
+        def __init__(self, out): self.out = out
+        def invoke(self, _): return type("M", (), {"content": self.out})()
+    monkeypatch.setattr(T, "get_llm", lambda: FakeLLM("저는 이전 대화를 기억하지 못합니다.\n다시 알려주세요."))
+    assert _REAL_REWRITE("방금 푼 문제 더 설명해줘") == "방금 푼 문제 더 설명해줘"
+    monkeypatch.setattr(T, "get_llm", lambda: FakeLLM("agentic loop stop_reason end_turn"))
+    assert _REAL_REWRITE("루프 종료 조건") == "agentic loop stop_reason end_turn"
 
 
 def test_general_fallback_not_used_for_pre_grading_hint(monkeypatch):
