@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import pytest
 
-from src import retriever, tools as T
+from src import tools as T
+from src.retrieval import service as retriever
+from src.search import service as search
+from src.shared import llm
 
 _REAL_REWRITE = T.llm_rewrite_query  # 아래 autouse fixture가 바꾸기 전의 실제 함수
 
@@ -11,9 +14,9 @@ _REAL_REWRITE = T.llm_rewrite_query  # 아래 autouse fixture가 바꾸기 전�
 @pytest.fixture(autouse=True)
 def _mocks(tmp_path, monkeypatch):
     monkeypatch.setenv("PROGRESS_DB_PATH", str(tmp_path / "p.db"))
-    monkeypatch.setattr(T, "llm_rewrite_query", lambda q: "tool use")
-    monkeypatch.setattr(T, "llm_answer", lambda *a, **k: T.SearchAnswer(answer="답변입니다."))
-    monkeypatch.setattr(T, "llm_general_answer", lambda *a, **k: T.GeneralAnswer(unknown=True))
+    monkeypatch.setattr(search, "llm_rewrite_query", lambda q: "tool use")
+    monkeypatch.setattr(search, "llm_answer", lambda *a, **k: T.SearchAnswer(answer="답변입니다."))
+    monkeypatch.setattr(search, "llm_general_answer", lambda *a, **k: T.GeneralAnswer(unknown=True))
 
 
 def _doc_for(domain):
@@ -154,7 +157,7 @@ def test_web_fallback_timeout_is_empty(monkeypatch):
 def test_general_knowledge_fallback_when_no_evidence(monkeypatch):
     """문서 근거가 없으면 표시를 붙여 AI 일반 지식으로 답하고, contexts와 sources는 비운다."""
     monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
-    monkeypatch.setattr(T, "llm_general_answer", lambda *a, **k: T.GeneralAnswer(answer="Claude는 Anthropic의 모델입니다."))
+    monkeypatch.setattr(search, "llm_general_answer", lambda *a, **k: T.GeneralAnswer(answer="Claude는 Anthropic의 모델입니다."))
     ctx = T.ToolContext()
     out = T.run_search_docs(ctx, "Claude가 뭐야?")
     assert out.startswith(T.GENERAL_LABEL) and "Anthropic의 모델" in out
@@ -175,7 +178,7 @@ def test_unknown_identifier_in_passages_is_evidence_gap(monkeypatch):
     hit = {"text": "CLI flags: --model, --print, --output-format.", "score": 0.9, "url": "https://code.claude.com/docs/en/cli-reference",
            "doc_path": "code/cc-cli-reference.md", "chunk_id": "cc-cli-reference#cli-flags"}
     monkeypatch.setattr(retriever, "search", lambda *a, **k: [hit])
-    monkeypatch.setattr(T, "llm_answer", lambda *a, **k: pytest.fail("구절 기반 답변 호출"))
+    monkeypatch.setattr(search, "llm_answer", lambda *a, **k: pytest.fail("구절 기반 답변 호출"))
     ctx = T.ToolContext()
     T.run_search_docs(ctx, "Claude Code의 quantum-entangle 플래그는 무엇인가요?")
     assert ctx.refusal_reason == "근거 부족" and ctx.contexts == []
@@ -188,16 +191,16 @@ def test_query_rewrite_rejects_chat_reply(monkeypatch):
     class FakeLLM:
         def __init__(self, out): self.out = out
         def invoke(self, _): return type("M", (), {"content": self.out})()
-    monkeypatch.setattr(T, "get_llm", lambda: FakeLLM("저는 이전 대화를 기억하지 못합니다.\n다시 알려주세요."))
+    monkeypatch.setattr(llm, "get_llm", lambda: FakeLLM("저는 이전 대화를 기억하지 못합니다.\n다시 알려주세요."))
     assert _REAL_REWRITE("방금 푼 문제 더 설명해줘") == "방금 푼 문제 더 설명해줘"
-    monkeypatch.setattr(T, "get_llm", lambda: FakeLLM("agentic loop stop_reason end_turn"))
+    monkeypatch.setattr(llm, "get_llm", lambda: FakeLLM("agentic loop stop_reason end_turn"))
     assert _REAL_REWRITE("루프 종료 조건") == "agentic loop stop_reason end_turn"
 
 
 def test_general_fallback_not_used_for_pre_grading_hint(monkeypatch):
     """채점 전 힌트에서는 일반 지식 답변을 쓰지 않는다(정답 유출 방지)."""
     monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
-    monkeypatch.setattr(T, "llm_general_answer", lambda *a, **k: pytest.fail("힌트에서 일반 지식 호출"))
+    monkeypatch.setattr(search, "llm_general_answer", lambda *a, **k: pytest.fail("힌트에서 일반 지식 호출"))
     q = T.load_questions()[0]
     T.set_pending("u", "s", q["id"])
     ctx = T.ToolContext(user_id="u", session_id="s")

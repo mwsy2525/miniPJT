@@ -12,7 +12,11 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
 from src import agent as A
-from src import retriever, tools as T
+from src import tools as T
+from src.orchestration import service as orch
+from src.retrieval import service as retriever
+from src.search import service as search
+from src.shared import llm
 
 TOP = {"answer", "contexts", "trace"}
 TRACE = {"tool_calls", "problem_id", "grading", "refusal_reason", "db_writes", "sources"}
@@ -57,9 +61,9 @@ class ScriptedModel(BaseChatModel):
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("PROGRESS_DB_PATH", str(tmp_path / "p.db"))
-    monkeypatch.setattr(A, "get_agent_llm", lambda: ScriptedModel())
-    monkeypatch.setattr(T, "llm_rewrite_query", lambda q: "stop_reason tool_use")
-    monkeypatch.setattr(T, "llm_answer", lambda *a, **k: T.SearchAnswer(answer="stop_reason은 tool_use/end_turn을 구분합니다."))
+    monkeypatch.setattr(orch, "get_agent_llm", lambda: ScriptedModel())
+    monkeypatch.setattr(search, "llm_rewrite_query", lambda q: "stop_reason tool_use")
+    monkeypatch.setattr(search, "llm_answer", lambda *a, **k: T.SearchAnswer(answer="stop_reason은 tool_use/end_turn을 구분합니다."))
     monkeypatch.setattr(retriever, "search", lambda q, k=4, domain=None, store=None: [
         {"text": "passage text about stop_reason", "doc_path": "platform/handling-stop-reasons.md",
          "chunk_id": "handling-stop-reasons#end-turn", "url": "https://x/y", "score": 0.9}])
@@ -140,8 +144,8 @@ def test_button_routes_work_without_llm(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
     from src import agent as A, tools as T
     monkeypatch.setenv("PROGRESS_DB_PATH", str(tmp_path / "p.db"))
-    monkeypatch.setattr(T, "get_llm", lambda: pytest.fail("LLM 호출 발생"))
-    monkeypatch.setattr(A, "get_agent_llm", lambda: pytest.fail("LLM 호출 발생"))
+    monkeypatch.setattr(llm, "get_llm", lambda: pytest.fail("LLM 호출 발생"))
+    monkeypatch.setattr(orch, "get_agent_llm", lambda: pytest.fail("LLM 호출 발생"))
     c = TestClient(A.app)
     ids = {"user_id": "u", "session_id": "s"}
     seen = []

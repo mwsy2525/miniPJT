@@ -6,6 +6,7 @@ import sqlite3
 import pytest
 
 from src import tools as T
+from src.shared import llm
 
 
 @pytest.fixture(autouse=True)
@@ -15,7 +16,7 @@ def _db(tmp_path, monkeypatch):
     def boom(*a, **k):
         raise AssertionError("채점·진도 경로에서 LLM을 호출하면 안 된다")
 
-    monkeypatch.setattr(T, "get_llm", boom)
+    monkeypatch.setattr(llm, "get_llm", boom)
 
 
 def _count(table: str) -> int:

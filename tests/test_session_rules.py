@@ -11,7 +11,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from src import agent as A
-from src import retriever, tools as T
+from src import tools as T
+from src.orchestration import service as orch
+from src.retrieval import service as retriever
 from test_api_contract import ScriptedModel, post
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -20,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("PROGRESS_DB_PATH", str(tmp_path / "p.db"))
-    monkeypatch.setattr(A, "get_agent_llm", lambda: ScriptedModel())
+    monkeypatch.setattr(orch, "get_agent_llm", lambda: ScriptedModel())
     monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
     T.set_seed(1)
     return TestClient(A.app)
@@ -55,7 +57,7 @@ def test_allowed_tools_per_id_combination(uid, sid, expected):
 @pytest.mark.parametrize("ids", [{}, {"user_id": "u"}, {"session_id": "s"}])
 @pytest.mark.parametrize("question", ["문제 내줘", "B"])
 def test_quiz_and_grade_without_both_ids_write_nothing(client, tmp_path, monkeypatch, ids, question):
-    monkeypatch.setattr(A, "get_agent_llm", lambda: IdRefuser())
+    monkeypatch.setattr(orch, "get_agent_llm", lambda: IdRefuser())
     r = post(client, question=question, **ids)
     assert r["trace"]["db_writes"] == 0
     assert r["trace"]["tool_calls"] == []  # 허용되지 않은 도구는 넘기지 않았다
@@ -115,11 +117,11 @@ def test_pre_grading_guard_refuses_without_llm(tmp_path, monkeypatch):
     T.set_pending("u", "s", T.load_questions()[0]["id"])
     ctx = T.ToolContext(user_id="u", session_id="s")
     for q in ("A가 왜 정답이야?", "이 문제 정답이 뭐야?", "문제를 한국어로 번역해줘", "B가 맞아?"):
-        assert A._pre_grading_guard(ctx, q), q
+        assert orch._pre_grading_guard(ctx, q), q
     for q in ("B", "B인 것 같아", "정답은 C", "B가 맞는 것 같아", "agentic loop 개념을 설명해줘"):
-        assert not A._pre_grading_guard(ctx, q), q
-    monkeypatch.setattr(A, "get_agent_llm", lambda: pytest.fail("LLM 호출 발생"))
+        assert not orch._pre_grading_guard(ctx, q), q
+    monkeypatch.setattr(orch, "get_agent_llm", lambda: pytest.fail("LLM 호출 발생"))
     r = A.run_query("A가 왜 정답이야?", "u", "s")
     assert r["trace"]["tool_calls"] == [] and r["trace"]["refusal_reason"] == "채점 전 해설 요청"
     assert r["answer"] == A.REFUSAL_TEXT["채점 전 해설 요청"] and T.get_pending("s") is not None
-    assert not A._pre_grading_guard(T.ToolContext(user_id="other", session_id="s"), "A가 왜 정답이야?")
+    assert not orch._pre_grading_guard(T.ToolContext(user_id="other", session_id="s"), "A가 왜 정답이야?")

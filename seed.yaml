@@ -30,7 +30,9 @@ constraints:
 - Python, LangChain, LangGraph를 쓴다. LLM은 Amazon Bedrock ChatBedrockConverse를 쓰고, 에이전트는
   langchain.agents의 create_agent로 만든다. 모델 ID와 리전은 .env에서 읽는다.
 - '폴더 구조를 고정한다: src/agent.py(에이전트 그래프), src/tools.py(도메인 도구), src/retriever.py(RAG
-  파이프라인), data/(문서·데이터), evaluation/(test_queries.csv와 평가 리포트).'
+  파이프라인), data/(문서·데이터), evaluation/(test_queries.csv와 평가 리포트). 세 src 파일은 진입점으로 유지하고 구현은
+  src/ 아래 도메인 폴더(api, orchestration, quiz, grading, progress, search, retrieval, question_bank, sessions)와
+  공통 폴더 shared에 둔다.'
 - 비밀 값은 모두 .env에서 읽는다.
 - '입력 규약: POST /query, 바디는 {question(필수), user_id?, session_id?}이고 question 필드를 읽는다.'
 - '출력 규약: 응답 최상위 키는 answer, contexts, trace 세 개뿐이다.'

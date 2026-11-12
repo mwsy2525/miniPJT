@@ -11,11 +11,25 @@
 - 진도와 세션 상태는 SQLite `data/progress.db`에 저장한다.
 - HTTP 서버는 FastAPI를 쓴다.
 
-## 폴더 구조 (제출 규약. 바꾸지 않는다)
+## 폴더 구조
+제출 규약 경로(`src/agent.py`, `src/tools.py`, `src/retriever.py`)는 진입점으로 유지하고, 구현은 `src/` 아래 도메인 폴더에 둔다.
 ```
-src/agent.py          메인 에이전트 그래프, POST /query
-src/tools.py          도메인 도구 4개
-src/retriever.py      RAG 파이프라인 (Chroma 로드·재생성, 검색)
+src/agent.py          진입점(제출 규약): `uvicorn src.agent:app`, POST /query. 구현은 api·orchestration
+src/tools.py          진입점(제출 규약): 도구 4개와 관련 이름을 다시 내보내기만 한다
+src/retriever.py      진입점(제출 규약): src/retrieval/service.py를 다시 내보내기만 한다
+src/api/              HTTP 계층. routes.py(FastAPI 앱, /, /query, /quiz, /grade, /progress), schemas.py(요청·응답 스키마)
+src/orchestration/    에이전트. service.py(ID별 도구 목록, create_agent, 채점 전 사전 거절, 응답 조립),
+                      prompts.py(시스템 프롬프트, 도구 설명, 사유 코드별 거절 안내문), schemas.py(AgentReply)
+src/quiz/             generate_quiz. service.py(출제 로직), schemas.py(도구 입력)
+src/grading/          grade_answer. service.py(답안 정규화, 결정적 채점, 해설 템플릿), schemas.py(도구 입력)
+src/progress/         get_progress. service.py(진도 계산), schemas.py(도구 입력)
+src/search/           search_docs. service.py(RAG 답변, 힌트, 후속 질문, 일반 지식 답변, 근거 부족 판정),
+                      prompts.py(LLM 프롬프트와 답변 표시 문구), schemas.py(구조화 출력, 도구 입력)
+src/retrieval/        공식 문서 코퍼스. service.py(청크 생성, Chroma 인덱스, 검색, 키 없는 웹 폴백)
+src/question_bank/    service.py(data/questions.json, data/exam_domains.yaml 읽기)
+src/sessions/         service.py(SQLite 대기 문제와 시도 기록 읽기·쓰기)
+src/shared/           여러 도메인이 함께 쓰는 것만. config.py(ROOT, .env, env), llm.py(Bedrock 채팅·임베딩 클라이언트,
+                      응답 텍스트 추출), context.py(ToolContext, 사유 코드 10개)
 data/docs/            공식 문서 스냅샷 + manifest.json
 data/questions.json   검수된 문제 은행
 data/exam_domains.yaml 출제 영역
@@ -102,12 +116,21 @@ web/index.html        시험지형 웹 화면 (GET /). 버튼은 POST /quiz·/gr
 - `expected_traits`는 리포트에 답변과 나란히 기록만 하고 판정에는 넣지 않는다.
 - 평가셋에 없는 거절 사유(user_id 불일치, 출제 문항 없음)와 웹 폴백 경로는 `tests/`의 단위 테스트에서 mock으로 확인한다.
 
+## 파일 배치 규칙 (`src/`)
+- 폴더는 기술 역할(utils, models)이 아니라 도메인(기능) 단위로 나눈다. 도메인 폴더 안에서는 실행 로직은 `service.py`, LLM 프롬프트와 고정 문구는 `prompts.py`, 입출력 스키마(pydantic)는 `schemas.py`에 둔다. 없는 것은 만들지 않는다.
+- `src/shared/`에는 둘 이상의 도메인이 쓰는 설정, LLM 클라이언트, 요청 문맥만 둔다. 한 도메인만 쓰는 것은 그 도메인 폴더에 둔다.
+- 다른 도메인의 함수는 `from src.question_bank import service as bank` 다음 `bank.load_questions()`처럼 모듈 이름을 붙여 부른다. 함수 이름을 직접 import하지 않는다. 테스트가 정의 모듈의 함수를 바꿔 끼워도 모든 호출에 반영되게 하기 위해서다.
+- 테스트와 평가 실행기의 mock은 진입점(`src/tools.py` 등)이 아니라 실제 정의 모듈(`src.search.service`, `src.shared.llm` 등)을 대상으로 한다.
+- 모듈 별칭과 같은 이름의 지역 변수나 함수를 만들지 않는다(예: `bank` 모듈을 쓰는 함수 안의 `bank = {...}`).
+- 의존 방향: api → orchestration → 도구 도메인(quiz, grading, progress, search) → 데이터 도메인(question_bank, sessions, retrieval) → shared. 거꾸로 import하지 않는다.
+- 새 도구는 도메인 폴더를 만들고 `orchestration/service.py`의 `build_tools`와 `orchestration/prompts.py`의 `TOOL_DESCRIPTIONS`에 등록한다.
+
 ## 코드 규칙
 - 파일 하나에는 역할 하나만 둔다.
 - 함수와 도구에는 한국어 docstring을 쓴다.
 - 비밀 값은 .env에서 읽고 코드에 적지 않는다.
 - 런타임 웹 조회는 `search_docs`의 웹 폴백 하나뿐이다. 문서 스냅샷 갱신은 수동 스크립트(`scripts/fetch_docs.py`)로만 한다.
-- 근거 구절 `chunk_id`는 `{doc_id}#{제목 슬러그}` 형식이다. 스냅샷 마크다운을 `##`·`###` 제목 단위로 나눈 구절을 가리키고, `retriever.py`도 같은 규칙으로 청크를 만든다.
+- 근거 구절 `chunk_id`는 `{doc_id}#{제목 슬러그}` 형식이다. 스냅샷 마크다운을 `##`·`###` 제목 단위로 나눈 구절을 가리키고, `src/retrieval/service.py`도 같은 규칙으로 청크를 만든다.
 - 테스트는 Bedrock 호출과 웹 조회를 mock 처리해서 오프라인에서도 돌아가게 한다. 평가 실행(`run_eval.py`)은 웹 폴백을 끄고 돌린다.
 
 ## 하지 말 것

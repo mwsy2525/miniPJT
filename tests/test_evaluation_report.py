@@ -22,9 +22,11 @@ def test_csv_shape():
 
 def test_offline_eval_meets_thresholds(tmp_path, monkeypatch):
     """mock 평가 실행이 합격 기준을 충족하고 리포트를 남긴다(평가 DB는 임시 경로)."""
-    from src import agent, retriever, tools
-    for mod, name in ((agent, "get_agent_llm"), (tools, "llm_rewrite_query"), (tools, "llm_answer"),
-                      (tools, "llm_general_answer"),
+    from src.orchestration import service as orch
+    from src.retrieval import service as retriever
+    from src.search import service as search
+    for mod, name in ((orch, "get_agent_llm"), (search, "llm_rewrite_query"), (search, "llm_answer"),
+                      (search, "llm_general_answer"),
                       (retriever, "search"), (retriever, "similarity_threshold")):
         monkeypatch.setattr(mod, name, getattr(mod, name))  # 테스트 종료 시 원복
     monkeypatch.setattr(R, "EVAL_DIR", tmp_path)

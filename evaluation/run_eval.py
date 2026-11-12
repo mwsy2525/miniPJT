@@ -51,8 +51,10 @@ def install_offline_mocks() -> None:
     from langchain_core.messages import AIMessage
     from langchain_core.outputs import ChatGeneration, ChatResult
 
-    from src import agent as A
-    from src import retriever, tools as T
+    from src import tools as T
+    from src.orchestration import service as orch
+    from src.retrieval import service as retriever
+    from src.search import service as search
 
     class Router(BaseChatModel):
         """질문 내용과 허용 도구로 도구를 고르는 가짜 tool-calling 모델."""
@@ -135,10 +137,10 @@ def install_offline_mocks() -> None:
     def answer(question, passages, mode, extra, oos):
         return T.SearchAnswer(answer="공식 문서 구절에 따르면 다음 내용이 근거입니다: " + passages[0][:200].replace("\n", " "))
 
-    A.get_agent_llm = lambda: Router()
-    T.llm_rewrite_query = rewrite
-    T.llm_answer = answer
-    T.llm_general_answer = lambda q, extra="": T.GeneralAnswer(unknown=True)  # 가짜 LLM은 모르는 것으로 둔다
+    orch.get_agent_llm = lambda: Router()
+    search.llm_rewrite_query = rewrite
+    search.llm_answer = answer
+    search.llm_general_answer = lambda q, extra="": T.GeneralAnswer(unknown=True)  # 가짜 LLM은 모르는 것으로 둔다
     retriever.search = lexical_search
     retriever.similarity_threshold = lambda: 0.5
 

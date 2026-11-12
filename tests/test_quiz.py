@@ -4,6 +4,7 @@ from __future__ import annotations
 import pytest
 
 from src import tools as T
+from src.question_bank import service as bank
 
 
 @pytest.fixture(autouse=True)
@@ -21,7 +22,7 @@ def _quiz(seed=1, sid="s", uid="u", **kw):
 def test_only_reviewed_questions_are_served(monkeypatch):
     qs = T.load_questions()
     bad = dict(qs[0], id="draft-1", reviewed=False)
-    monkeypatch.setattr(T, "load_questions", lambda: qs + [bad])
+    monkeypatch.setattr(bank, "load_questions", lambda: qs + [bad])
     for seed in range(30):
         assert _quiz(seed=seed, sid=f"s{seed}").problem_id != "draft-1"
 
@@ -45,7 +46,7 @@ def test_random_across_whole_bank_and_resolves_repeats(monkeypatch):
     assert len({T.question_by_id(p)["domain"] for p in seen}) > 1
     # 이미 푼 문항도 다시 출제: 후보를 1개로 줄여도 계속 출제된다
     one = [q for q in T.load_questions() if q["domain"] == 1][:1]
-    monkeypatch.setattr(T, "load_questions", lambda: one)
+    monkeypatch.setattr(bank, "load_questions", lambda: one)
     for i in range(2):
         c = T.ToolContext(user_id="u", session_id="again")
         T.run_generate_quiz(c, domain=1)
@@ -65,7 +66,7 @@ def test_unknown_domain_refused_with_domain_list(domain):
 
 def test_zero_reviewed_domain_refused(monkeypatch):
     qs = [dict(q, reviewed=False) if q["domain"] == 2 else q for q in T.load_questions()]
-    monkeypatch.setattr(T, "load_questions", lambda: qs)
+    monkeypatch.setattr(bank, "load_questions", lambda: qs)
     ctx = _quiz(domain=2)
     assert ctx.refusal_reason == "출제 문항 없음" and ctx.db_writes == 0
     assert "Domain 1" in ctx.answer and "Domain 2:" not in ctx.answer
