@@ -44,11 +44,15 @@ def _env(name: str, default: str = "") -> str:
 
 
 def get_llm():
-    """ChatBedrockConverse(temperature=0)를 만든다. 모델 ID와 리전은 .env에서 읽는다."""
+    """ChatBedrockConverse(temperature=0)를 만든다. 모델 ID와 리전은 .env에서 읽는다.
+
+    호출량 제한(throttling) 같은 일시 오류는 AWS SDK의 adaptive 재시도로 흡수한다.
+    """
+    from botocore.config import Config
     from langchain_aws import ChatBedrockConverse
 
     return ChatBedrockConverse(model=_env("BEDROCK_MODEL_ID"), region_name=_env("AWS_REGION") or None,
-                               temperature=0)
+                               temperature=0, config=Config(retries={"mode": "adaptive", "max_attempts": 8}))
 
 
 # ---------------------------------------------------------------- 데이터 로드

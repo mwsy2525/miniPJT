@@ -127,10 +127,12 @@ def _signature() -> str:
 
 
 def get_embeddings():
-    """BedrockEmbeddings를 만든다(LLM과 같은 자격증명, 모델 ID는 .env)."""
+    """BedrockEmbeddings를 만든다(LLM과 같은 자격증명, 모델 ID는 .env). 일시 오류는 adaptive 재시도로 흡수한다."""
+    from botocore.config import Config
     from langchain_aws import BedrockEmbeddings
 
-    return BedrockEmbeddings(model_id=_env("EMBEDDING_MODEL_ID"), region_name=_env("AWS_REGION") or None)
+    return BedrockEmbeddings(model_id=_env("EMBEDDING_MODEL_ID"), region_name=_env("AWS_REGION") or None,
+                             config=Config(retries={"mode": "adaptive", "max_attempts": 8}))
 
 
 def get_vectorstore(embeddings=None, force: bool = False):
