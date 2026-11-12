@@ -197,6 +197,17 @@ def test_query_rewrite_rejects_chat_reply(monkeypatch):
     assert _REAL_REWRITE("루프 종료 조건") == "agentic loop stop_reason end_turn"
 
 
+def test_hint_query_rewrite_sees_problem_stem(monkeypatch):
+    """채점 전 힌트의 검색어 변환에는 대기 문제 지문이 함께 넘어가고, 정답 키는 넘어가지 않는다."""
+    seen = []
+    monkeypatch.setattr(search, "llm_rewrite_query", lambda q: seen.append(q) or "tool use")
+    monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
+    q = T.load_questions()[0]
+    T.set_pending("u", "s", q["id"])
+    T.run_search_docs(T.ToolContext(user_id="u", session_id="s"), "이 문제의 개념 설명해줘")
+    assert q["stem_en"] in seen[0] and q["why_correct"] not in seen[0]
+
+
 def test_general_fallback_not_used_for_pre_grading_hint(monkeypatch):
     """채점 전 힌트에서는 일반 지식 답변을 쓰지 않는다(정답 유출 방지)."""
     monkeypatch.setattr(retriever, "search", lambda *a, **k: [])

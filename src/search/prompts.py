@@ -2,7 +2,8 @@
 
 REWRITE_SYSTEM = ("You convert text into a search query. Do not answer or reply to the text. "
                   "Rewrite it as a concise English search query (at most 12 words) for Anthropic/Claude "
-                  "documentation. Output only the query on one line.")
+                  "documentation. Output only the query on one line. If a <problem> is given, the text refers to it: "
+                  "build the query from the concepts in that problem.")
 
 ANSWER_RULES = [
     "당신은 CCAR-F 학습 도우미다. 한국어로 답하되 핵심 용어와 API 이름은 영어로 둔다.",

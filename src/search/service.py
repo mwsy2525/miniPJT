@@ -138,7 +138,12 @@ def run_search_docs(ctx: ToolContext, question: str) -> str:
     if followup_q:
         ctx.problem_id = followup_q["id"]
 
-    query_en = llm_rewrite_query(question)
+    # 힌트·후속 질문은 '이 문제'를 가리키므로 문제 지문(stem_en, 힌트 LLM에 허용된 필드)을 함께 넘겨 검색어를 만든다
+    about = pq or followup_q
+    rewrite_in = f"{question}\n\n<problem>{about['stem_en']}</problem>" if about else question
+    query_en = llm_rewrite_query(rewrite_in)
+    if query_en == rewrite_in:  # 변환 실패로 원문이 돌아오면 질문 원문으로 검색한다
+        query_en = question if not about else f"{question} {about['stem_en']}"
     args["search_query_en"] = query_en
 
     blocked = {e["chunk_id"] for e in pq["evidence"]} if pq else set()
