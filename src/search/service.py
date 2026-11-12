@@ -22,7 +22,7 @@ GENERAL_LABEL = P.GENERAL_LABEL
 def llm_rewrite_query(question: str) -> str:
     """[LLM 1] 한국어 질문을 영어 검색어로 바꾼다(실패하면 원문)."""
     try:
-        msg = llm.get_llm().invoke([SystemMessage(content=P.REWRITE_SYSTEM),
+        msg = llm.get_fast_llm().invoke([SystemMessage(content=P.REWRITE_SYSTEM),
                                     HumanMessage(content=f"<text>{question}</text>")])
         out = llm.message_text(msg).strip()
     except Exception:

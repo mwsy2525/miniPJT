@@ -4,7 +4,7 @@
 
 ## 기술 스택
 - Python, LangChain, LangGraph
-- 모델은 Amazon Bedrock `ChatBedrockConverse`(temperature=0)를 쓴다. 모델 ID와 리전은 .env에서 읽는다.
+- 모델은 Amazon Bedrock `ChatBedrockConverse`(temperature=0)를 쓴다. 모델 ID와 리전은 .env에서 읽는다. 검색어 변환처럼 짧은 작업은 .env `FAST_MODEL_ID`(비우면 기본 모델)로 돌린다. LLM·임베딩 클라이언트와 Chroma 저장소는 프로세스 안에서 한 번 만들어 재사용한다.
 - Agent는 `langchain.agents`의 `create_agent`로 만든다.
 - 임베딩은 `BedrockEmbeddings`(다국어 모델, ID는 .env)를 쓴다.
 - 벡터 저장소는 Chroma를 쓰고 `data/chroma/`에 영속 저장한다. git에는 올리지 않는다.

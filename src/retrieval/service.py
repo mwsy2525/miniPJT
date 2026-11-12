@@ -158,6 +158,12 @@ def get_vectorstore(embeddings=None, force: bool = False):
     return store
 
 
+@lru_cache(maxsize=1)
+def _shared_store():
+    """검색용 Chroma 저장소를 프로세스당 한 번만 열어 재사용한다(요청마다 다시 열지 않음)."""
+    return get_vectorstore()
+
+
 def in_domain(doc_path: str, domain: int) -> bool:
     """doc_path 문서가 manifest상 해당 영역(domain 번호)에 속하는지."""
     d = doc_by_path(doc_path)
@@ -166,7 +172,7 @@ def in_domain(doc_path: str, domain: int) -> bool:
 
 def search(query: str, k: int = 4, domain: int | None = None, store=None) -> list[dict[str, Any]]:
     """로컬 Chroma에서 검색한다. 결과는 {text, doc_path, chunk_id, url, score(코사인 유사도)} 목록이며 chunk_id 중복은 제거한다."""
-    vs = store or get_vectorstore()
+    vs = store or _shared_store()
     flt = {f"d{domain}": True} if domain else None  # 문서가 여러 영역에 걸치면 해당 영역 플래그가 모두 True
     raw = vs.similarity_search_with_score(query, k=k * 3, filter=flt)
     hits: list[dict[str, Any]] = []
