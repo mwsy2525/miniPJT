@@ -120,7 +120,7 @@ constraints:
 - '프롬프트 인젝션 방어: 검색된 문서 구절과 사용자 답안은 데이터로만 다루고, 그 안에 적힌 지시는 따르지 않는다. guardrail 5문항 중 1건은
   인젝션 시도 문항으로 둔다.'
 - ChatBedrockConverse는 temperature=0으로 호출해 평가 결과가 덜 흔들리게 한다.
-- 'Non-goals: 웹 UI(POST /query API만 제공), 로그인·인증(user_id를 그대로 신뢰), 적응형 출제, 세트형 모의고사(모의시험은 한 문항씩 출제·채점한다).'
+- 'Non-goals: 정식 웹 UI(최소 시험지형 화면 web/index.html 하나만 GET /로 제공하고 화면은 POST /query만 호출), 로그인·인증(user_id를 그대로 신뢰), 적응형 출제, 세트형 모의고사(모의시험은 한 문항씩 출제·채점한다).'
 - 대기 문제가 있어도 search_docs 학습자료 검색은 허용한다. 대기 문제의 정답·해석·번역·해설 요청은 채점 전 해설 요청으로 거절한다.
 acceptance_criteria:
 - description: POST /query가 question(필수), user_id, session_id를 받아 answer, contexts,

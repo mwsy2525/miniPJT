@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCAR-F 모의시험</title>
+<style>
+/* 시험지형 화면: 위에 출제 조작, 가운데 문제 카드, 아래 질문 창과 진도. 모든 동작은 POST /query 하나로 한다. */
+:root{
+  --bg:#f3f5f8; --surface:#fff; --line:#d9dee7; --fg:#1b2130; --muted:#5d6678;
+  --accent:#2b59c3; --accent-soft:#e3eafa; --ok:#1d7a4c; --ok-soft:#e0f2e8; --bad:#b4372f; --bad-soft:#f8e4e2; --ai:#7a4fb5; --ai-soft:#efe8f8;
+  --sans:"Malgun Gothic","Apple SD Gothic Neo",system-ui,sans-serif; --mono:ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#12161f; --surface:#1a202c; --line:#2c3445; --fg:#e4e8f0; --muted:#97a1b4;
+  --accent:#7d9ef0; --accent-soft:#232f4c; --ok:#5cc28e; --ok-soft:#183427; --bad:#ec7f76; --bad-soft:#3a1f1e; --ai:#b896e8; --ai-soft:#2a2240; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.6;padding:24px 16px 64px}
+.wrap{max-width:780px;margin:0 auto;display:grid;gap:16px}
+h1{font-size:21px;margin:0}
+.sub{color:var(--muted);margin:2px 0 0;font-size:13px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+label{font-size:13px;color:var(--muted)}
+input[type=text],select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0}
+input[type=text]:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.btn{font:inherit;cursor:pointer;background:var(--accent);color:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:7px 16px;font-weight:600}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.45;cursor:default}
+.tag{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.stem{font-size:16px;font-weight:600;margin:8px 0 14px}
+.choices{display:grid;gap:8px;margin-bottom:14px}
+.ch{font:inherit;text-align:left;color:var(--fg);background:var(--surface);cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;gap:10px}
+.ch:hover:not(:disabled){border-color:var(--accent)}
+.ch .k{font-family:var(--mono);font-weight:700;color:var(--accent)}
+.ch.sel{background:var(--accent-soft);border-color:var(--accent)}
+.ch.correct{background:var(--ok-soft);border-color:var(--ok)}
+.ch.wrong{background:var(--bad-soft);border-color:var(--bad)}
+.ch:disabled{cursor:default}
+.banner{border-radius:8px;padding:10px 14px;font-weight:700;margin:4px 0 8px}
+.banner.ok{background:var(--ok-soft);color:var(--ok)} .banner.bad{background:var(--bad-soft);color:var(--bad)}
+.notice{border-radius:8px;padding:10px 14px;background:var(--bad-soft);color:var(--bad);font-size:14px}
+details{border-top:1px solid var(--line);padding:8px 0}
+summary{cursor:pointer;font-weight:600}
+.md{min-width:0;overflow-wrap:anywhere}
+.md p{margin:6px 0} .md ul{margin:6px 0;padding-left:20px}
+.md code{font-family:var(--mono);font-size:13px;background:var(--bg);padding:1px 4px;border-radius:4px}
+.md pre{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow-x:auto;font-family:var(--mono);font-size:12px}
+.md pre code{background:none;padding:0}
+.md table{border-collapse:collapse;width:100%;font-size:14px;display:block;overflow-x:auto}
+.md th,.md td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:left}
+.md h3{font-size:15px;margin:12px 0 4px}
+.md a{color:var(--accent)}
+.ai{background:var(--ai-soft);border-radius:10px;padding:12px 14px}
+.ai .who{font-size:12px;font-family:var(--mono);color:var(--ai);margin-bottom:4px}
+.me{align-self:flex-end;background:var(--accent);color:var(--surface);border-radius:10px;padding:8px 12px;max-width:85%}
+#chat{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+.src{font-size:12px;color:var(--muted);margin-top:6px}
+.src a{color:var(--accent)}
+pre#trace{margin:8px 0 0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;font-family:var(--mono);font-size:12px;overflow:auto;max-height:260px}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;vertical-align:-2px;margin-right:6px}
+@media (prefers-reduced-motion:no-preference){.spin{animation:r .8s linear infinite}@keyframes r{to{transform:rotate(360deg)}}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>CCAR-F 모의시험</h1>
+    <p class="sub">Claude Certified Architect – Foundations · 영어 문제를 한 문항씩 풀고, 채점 후 검수된 한영 해설을 봅니다.</p>
+  </header>
+
+  <section class="panel">
+    <div class="row">
+      <label for="uid">사용자 ID</label>
+      <input type="text" id="uid" size="14" autocomplete="off">
+      <label for="domain">영역</label>
+      <select id="domain">
+        <option value="">전체(무작위)</option>
+        <option value="1">1 Agentic Architecture</option>
+        <option value="2">2 Tool Design &amp; MCP</option>
+        <option value="3">3 Claude Code</option>
+        <option value="4">4 Prompt &amp; Structured Output</option>
+        <option value="5">5 Context &amp; Reliability</option>
+      </select>
+      <button class="btn" id="new">새 문제</button>
+      <button class="btn ghost" id="prog">내 진도</button>
+      <span id="busy" hidden><span class="spin"></span><span class="tag">응답 대기 중…</span></span>
+    </div>
+    <div id="err" class="notice" hidden style="margin-top:12px"></div>
+  </section>
+
+  <section class="panel" id="quiz" hidden>
+    <div class="tag" id="q-label"></div>
+    <div class="stem" id="q-stem"></div>
+    <div class="choices" id="q-choices"></div>
+    <div class="row"><button class="btn" id="submit" disabled>답안 제출</button><span class="tag" id="q-note"></span></div>
+    <div id="result"></div>
+  </section>
+
+  <section class="panel" id="ask" hidden>
+    <strong>AI에게 질문</strong>
+    <p class="sub" id="ask-help"></p>
+    <div id="chat"></div>
+    <form class="row" id="ask-form">
+      <input type="text" id="ask-input" style="flex:1" maxlength="2000" autocomplete="off" placeholder="질문을 입력하세요">
+      <button class="btn" type="submit">보내기</button>
+    </form>
+  </section>
+
+  <section class="panel" id="progress" hidden>
+    <strong>내 진도</strong>
+    <div class="md" id="progress-body"></div>
+  </section>
+
+  <details class="panel">
+    <summary>마지막 응답의 trace (개발자용)</summary>
+    <pre id="trace">{}</pre>
+  </details>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const sessionId = "web-" + Math.random().toString(36).slice(2, 10);
+let selected = null, pending = false, graded = false;
+
+try { $("uid").value = localStorage.getItem("ccarf_uid") || ""; } catch (e) {}
+if (!$("uid").value) $("uid").value = "user-" + Math.random().toString(36).slice(2, 7);
+$("uid").addEventListener("change", () => { try { localStorage.setItem("ccarf_uid", $("uid").value.trim()); } catch (e) {} });
+
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+function inline(s) {
+  return esc(s)
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+}
+/* 응답 본문(마크다운 일부: 제목, 목록, 표, 코드 블록)을 HTML로 바꾼다. */
+function md(text) {
+  const out = []; const lines = text.split("\n"); let i = 0, list = false;
+  const endList = () => { if (list) { out.push("</ul>"); list = false; } };
+  while (i < lines.length) {
+    const l = lines[i];
+    if (l.trim().startsWith("```")) {
+      endList(); const buf = []; i++;
+      while (i < lines.length && !lines[i].trim().startsWith("```")) buf.push(lines[i++]);
+      i++; out.push("<pre><code>" + esc(buf.join("\n")) + "</code></pre>"); continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(l)) {
+      endList(); const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(lines[i++]);
+      const cells = r => r.trim().slice(1, -1).split("|").map(c => c.trim());
+      let h = "<table>";
+      rows.forEach((r, n) => {
+        if (/^\s*\|[\s:|-]+\|\s*$/.test(r)) return;
+        const t = n === 0 ? "th" : "td";
+        h += "<tr>" + cells(r).map(c => `<${t}>${inline(c)}</${t}>`).join("") + "</tr>";
+      });
+      out.push(h + "</table>"); continue;
+    }
+    const hm = l.match(/^#{1,4}\s+(.*)/);
+    if (hm) { endList(); out.push("<h3>" + inline(hm[1]) + "</h3>"); i++; continue; }
+    const lm = l.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
+    if (lm) { if (!list) { out.push("<ul>"); list = true; } out.push("<li>" + inline(lm[1]) + "</li>"); i++; continue; }
+    endList();
+    if (l.trim()) out.push("<p>" + inline(l) + "</p>");
+    i++;
+  }
+  endList(); return out.join("");
+}
+
+function busy(on) {
+  $("busy").hidden = !on;
+  document.querySelectorAll("button").forEach(b => { if (on) { b.dataset.was = b.disabled; b.disabled = true; } else if (b.dataset.was !== undefined) { b.disabled = b.dataset.was === "true"; delete b.dataset.was; } });
+}
+function showError(msg) { $("err").textContent = msg; $("err").hidden = !msg; }
+
+async function query(question) {
+  const uid = $("uid").value.trim();
+  if (!uid) { showError("사용자 ID를 입력해 주세요."); return null; }
+  showError(""); busy(true);
+  try {
+    const r = await fetch("/query", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, user_id: uid, session_id: sessionId }) });
+    if (!r.ok) {
+      showError(r.status === 502 ? "모델 서버 응답에 실패했습니다. 잠시 뒤 다시 시도해 주세요. (502)" : `요청을 처리하지 못했습니다. (${r.status})`);
+      return null;
+    }
+    const d = await r.json();
+    $("trace").textContent = JSON.stringify(d.trace, null, 2);
+    return d;
+  } catch (e) { showError("서버에 연결하지 못했습니다. 서버가 켜져 있는지 확인해 주세요."); return null; }
+  finally { busy(false); }
+}
+
+function updateAskHelp() {
+  $("ask-help").textContent = pending
+    ? "채점 전: 문제의 개념에 대한 힌트만 받을 수 있습니다. 정답·번역·보기 판단은 알려 주지 않습니다."
+    : graded ? "채점 후: 방금 푼 문제에 대해 더 물어볼 수 있습니다. 공식 문서 근거로 답합니다."
+    : "Claude·Anthropic 공식 문서에 대해 물어볼 수 있습니다.";
+}
+
+/* 출제 응답 본문에서 범위 표시, 문제, 보기를 뽑는다. */
+function parseQuiz(text) {
+  const lines = text.split("\n"); const choices = {}; const stem = []; let label = "", note = "", seenId = false;
+  for (const l of lines) {
+    const c = l.match(/^([A-D])\.\s+(.*)/);
+    if (c) { choices[c[1]] = c[2]; continue; }
+    if (/^\[.*\]$/.test(l.trim()) && !label) { label = l.trim(); continue; }
+    if (l.startsWith("문제 ID:")) { seenId = true; continue; }
+    if (!seenId && l.trim()) { note = l.trim(); continue; }
+    if (seenId && !Object.keys(choices).length && l.trim()) stem.push(l.trim());
+  }
+  return { label, note, stem: stem.join(" "), choices };
+}
+
+$("new").onclick = async () => {
+  const dom = $("domain").value;
+  const d = await query(dom ? `Domain ${dom} 문제 내줘` : "문제 내줘");
+  if (!d) return;
+  $("quiz").hidden = false; $("ask").hidden = false; $("result").innerHTML = ""; $("chat").innerHTML = "";
+  if (d.trace.refusal_reason || !d.trace.problem_id) {
+    $("q-label").textContent = ""; $("q-stem").textContent = ""; $("q-choices").innerHTML = ""; $("q-note").textContent = "";
+    $("result").innerHTML = `<div class="notice md">${md(d.answer)}</div>`; $("submit").disabled = true; pending = false; updateAskHelp(); return;
+  }
+  const q = parseQuiz(d.answer);
+  selected = null; pending = true; graded = false; updateAskHelp();
+  $("q-label").textContent = `${q.label} · ${d.trace.problem_id}`;
+  $("q-note").textContent = q.note;
+  $("q-stem").textContent = q.stem;
+  $("q-choices").innerHTML = "";
+  for (const k of "ABCD") {
+    const b = document.createElement("button");
+    b.className = "ch"; b.dataset.k = k;
+    b.innerHTML = `<span class="k">${k}</span><span>${esc(q.choices[k] || "")}</span>`;
+    b.onclick = () => { selected = k; document.querySelectorAll(".ch").forEach(x => x.classList.toggle("sel", x === b)); $("submit").disabled = false; };
+    $("q-choices").appendChild(b);
+  }
+  $("submit").disabled = true;
+};
+
+$("submit").onclick = async () => {
+  if (!selected) return;
+  const d = await query(selected);
+  if (!d) return;
+  const g = d.trace.grading;
+  if (!g) { $("result").innerHTML = `<div class="notice md">${md(d.answer)}</div>`; return; }
+  pending = false; graded = true; updateAskHelp();
+  document.querySelectorAll(".ch").forEach(b => {
+    b.classList.remove("sel"); b.disabled = true;
+    if (b.dataset.k === g.correct) b.classList.add("correct");
+    else if (b.dataset.k === g.chosen) b.classList.add("wrong");
+  });
+  $("submit").disabled = true;
+  const ok = g.chosen === g.correct;
+  let h = `<div class="banner ${ok ? "ok" : "bad"}">${ok ? "✓ 정답입니다" : "✗ 오답입니다"} · 선택 ${g.chosen} / 정답 ${g.correct}</div>`;
+  const open = ["문제 의도", "정답인 이유", "오답인 이유"];
+  for (const sec of d.answer.split(/\n(?=## )/)) {
+    const m = sec.match(/^## (.+)\n([\s\S]*)$/);
+    if (!m || m[1].startsWith("채점 결과")) continue;
+    h += `<details${open.some(o => m[1].startsWith(o)) ? " open" : ""}><summary>${esc(m[1])}</summary><div class="md">${md(m[2])}</div></details>`;
+  }
+  $("result").innerHTML = h;
+};
+
+$("ask-form").onsubmit = async e => {
+  e.preventDefault();
+  const q = $("ask-input").value.trim(); if (!q) return;
+  const me = document.createElement("div"); me.className = "me"; me.textContent = q; $("chat").appendChild(me);
+  $("ask-input").value = "";
+  const d = await query(q);
+  if (!d) return;
+  const box = document.createElement("div"); box.className = "ai";
+  const who = d.trace.refusal_reason ? `안내 · ${d.trace.refusal_reason}` : "AI 답변";
+  const urls = [...new Set(d.trace.sources.map(s => s.url).filter(Boolean))];
+  box.innerHTML = `<div class="who">${esc(who)}</div><div class="md">${md(d.answer)}</div>` +
+    (urls.length ? `<div class="src">근거 문서: ${urls.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\//, ""))}</a>`).join(" · ")}</div>` : "");
+  $("chat").appendChild(box); box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+};
+
+$("prog").onclick = async () => {
+  const d = await query("내 진도 보여줘");
+  if (!d) return;
+  $("progress").hidden = false; $("progress-body").innerHTML = md(d.answer);
+  $("progress").scrollIntoView({ behavior: "smooth", block: "nearest" });
+};
+
+$("ask").hidden = false; updateAskHelp();
+</script>
+</body>
+</html>

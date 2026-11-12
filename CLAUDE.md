@@ -20,6 +20,7 @@ data/docs/            공식 문서 스냅샷 + manifest.json
 data/questions.json   검수된 문제 은행
 data/exam_domains.yaml 출제 영역
 evaluation/           test_queries.csv, run_eval.py, 평가 리포트
+web/index.html        시험지형 웹 화면 (GET /, POST /query만 호출)
 ```
 
 ## 주고받는 형식 (제출 규약)

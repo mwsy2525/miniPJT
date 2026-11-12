@@ -4,9 +4,11 @@
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Optional
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import HumanMessage
@@ -164,6 +166,13 @@ def run_query(question: str, user_id: Optional[str], session_id: Optional[str]) 
 
 
 app = FastAPI(title="CCAR-F 모의시험 Agent")
+WEB_INDEX = Path(__file__).resolve().parent.parent / "web" / "index.html"
+
+
+@app.get("/", include_in_schema=False)
+def index() -> FileResponse:
+    """시험지형 웹 화면(web/index.html)을 돌려준다. 화면은 POST /query만 호출한다."""
+    return FileResponse(WEB_INDEX, media_type="text/html")
 
 
 @app.post("/query", response_model=QueryResponse)
