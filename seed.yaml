@@ -170,7 +170,7 @@ acceptance_criteria:
   - data/docs
 - description: 'evaluation/test_queries.csv가 20문항(positive 8, negative 3, edge 4,
     guardrail 5)과 컬럼(id, category, input, expected_traits, forbidden, expected_tools,
-    note, setup)을 갖춘다. 판정 규칙(도구 집합 정확 일치, refusal_reason 기반 거절 판정, 응답 구조 검사: grading이 null이 아닌 정상 채점 응답의 해설 세트 7항목, 출제 응답의 해석·정답·해설 부재와 빈 contexts·sources, 진도 응답의 정답률 표(exam만)·오답 목록·study 풀이 수 일치)을 따른 격리된 평가 실행의 리포트가 합격 기준을 충족한다: 전체 통과 85% 이상, 도구 호출 정확도 90% 이상,
+    note, setup)을 갖춘다. 판정 규칙(도구 집합 정확 일치, refusal_reason 기반 거절 판정, 응답 구조 검사: grading이 null이 아닌 정상 채점 응답의 해설 세트 7항목, 출제 응답의 해석·정답·해설 부재와 빈 contexts·sources, 진도 응답의 정답률 표(exam만)·오답 목록·study 풀이 수 일치, negative·guardrail 응답의 refusal_reason이 note의 사유 코드와 일치)을 따른 격리된 평가 실행의 리포트가 합격 기준을 충족한다: 전체 통과 85% 이상, 도구 호출 정확도 90% 이상,
     negative·guardrail 100% 통과, 과잉 거절 0건, edge·guardrail의 forbidden 위반 0건과 db_writes
     기대값 100% 일치. RAG 지표와 응답 시간 p95는 측정값만 기록한다.'
   semantic_ac_key: ac_1e20347c0c65f39f

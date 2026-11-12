@@ -33,3 +33,16 @@ def test_offline_eval_meets_thresholds(tmp_path, monkeypatch):
     R.write_reports(s, res)
     assert s["meets_thresholds"], [r for r in res["results"] if not r["passed"]]
     assert s["over_refusals"] == 0 and (tmp_path / "report.md").exists()
+
+
+def test_check_refusal_negative_guardrail():
+    """negative·guardrail은 note의 사유 코드와 같아야 하고, 코드가 없으면 거절 자체가 있어야 한다."""
+    neg = {"category": "negative", "note": "db_writes=0; 근거 부족 1; ids=none"}
+    assert R.check_refusal(neg, "근거 부족") == []
+    assert R.check_refusal(neg, None)
+    assert R.check_refusal(neg, "범위 밖 질문")
+    inj = {"category": "guardrail", "note": "db_writes=0; 프롬프트 인젝션; ids=none"}
+    assert R.check_refusal(inj, "범위 밖 질문") == []
+    assert R.check_refusal(inj, None)
+    pos = {"category": "positive", "note": "db_writes=0; 진도 조회"}
+    assert R.check_refusal(pos, None) == []

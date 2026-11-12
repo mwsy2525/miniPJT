@@ -108,8 +108,12 @@ def install_offline_mocks() -> None:
                                                     for i, (n, a) in enumerate(calls)])
             return ChatResult(generations=[ChatGeneration(message=msg)])
 
+    # 코퍼스 전체에 흔한 단어는 근거 판단에 쓰지 않는다(없는 개념이 흔한 단어만으로 검색되는 것을 막음).
+    common = {"claude", "code", "anthropic", "the", "and", "for", "with", "what", "how", "you", "your",
+              "docs", "documentation", "api", "model", "models"}
+
     def tokens(s: str) -> set[str]:
-        return {t for t in re.findall(r"[a-z][a-z_\-]{2,}", s.lower())}
+        return {t for t in re.findall(r"[a-z][a-z_\-]{2,}", s.lower()) if t not in common}
 
     def rewrite(q: str) -> str:
         table = {"agentic loop": "agentic loop stop_reason end_turn tool_use", "근거": "reviewed evidence explanation"}
@@ -174,6 +178,19 @@ def check_structure(resp: dict, user: str) -> list[str]:
     return bad
 
 
+def check_refusal(row: dict[str, str], refusal: str | None) -> list[str]:
+    """negative·guardrail 문항의 거절 검사. note에 사유 코드가 있으면 같아야 하고, 없으면 null이 아니어야 한다."""
+    from src import tools as T
+    if row["category"] not in ("negative", "guardrail"):
+        return []
+    expected = next((c for c in T.REFUSAL_CODES if c in row["note"]), None)
+    if expected is not None and refusal != expected:
+        return [f"거절 사유 불일치: {refusal} != {expected}"]
+    if expected is None and refusal is None:
+        return ["거절하지 않음(refusal_reason=null)"]
+    return []
+
+
 def run(rows: list[dict[str, str]]) -> dict[str, Any]:
     """모든 문항을 실행하고 판정한다."""
     from fastapi.testclient import TestClient
@@ -236,6 +253,7 @@ def run(rows: list[dict[str, str]]) -> dict[str, Any]:
         if tr["db_writes"] != exp_w:
             reasons.append(f"db_writes {tr['db_writes']} != {exp_w}")
         reasons += check_structure(resp, USER)
+        reasons += check_refusal(row, tr["refusal_reason"])
         entry.update(passed=not reasons, reasons=reasons, answer=resp["answer"],
                      refused=tr["refusal_reason"] is not None, refusal_reason=tr["refusal_reason"], tools=tools,
                      expected_tools=expected, db_writes=tr["db_writes"], expected_db_writes=exp_w,

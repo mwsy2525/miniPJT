@@ -92,6 +92,7 @@ evaluation/           test_queries.csv, run_eval.py, 평가 리포트
 - 응답 구조 검사:
   - 채점 응답(`trace.grading`이 null이 아닐 때만, 거절 응답 제외): 해설 세트 7개 섹션(채점 결과, 한영 병기, 문제 의도, 정답인 이유, 오답인 이유, 학습 포인트, 참고 공식문서)이 모두 있다.
   - 출제 응답: `stem_ko`, `choices_ko`, 정답, 해설 필드 내용이 `answer`에 없고 `contexts`와 `trace.sources`가 `[]`이다.
+  - negative·guardrail 응답: `refusal_reason`이 `note`에 적힌 사유 코드와 같다. `note`에 사유 코드가 없으면(예: 프롬프트 인젝션) `refusal_reason`이 null이 아니다.
   - 진도 응답: 정답률 표(`scope=exam` 문항만)와 오답 목록, `study` 풀이 수가 DB에서 다시 계산한 값과 같다.
 - 도구 호출 정확도의 분모는 `expected_tools`가 비어 있지 않은 문항이다.
 - 거절은 `trace.refusal_reason`이 null이 아닌 것이다.

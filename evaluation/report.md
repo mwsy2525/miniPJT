@@ -11,7 +11,7 @@
 - edge·guardrail forbidden 위반: 0
 - db_writes 일치율: edge·guardrail 100%, 전체 100%
 - 응답 시간 p95: 0.06s (기록만)
-- RAG 지표(기록만): {'search_docs_answers': 4, 'with_sources': 4, 'avg_contexts': 3.75, 'note': '측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)'}
+- RAG 지표(기록만): {'search_docs_answers': 2, 'with_sources': 2, 'avg_contexts': 3.5, 'note': '측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)'}
 - 합격 기준 충족: **True**
 
 ## 문항별 결과
@@ -25,8 +25,8 @@
 | P06 | positive | ✅ | get_progress | - | 0 | - |
 | P07 | positive | ✅ | search_docs | - | 0 | - |
 | P08 | positive | ✅ | search_docs | - | 0 | - |
-| N01 | negative | ✅ | search_docs | - | 0 | - |
-| N02 | negative | ✅ | search_docs | - | 0 | - |
+| N01 | negative | ✅ | search_docs | 근거 부족 | 0 | - |
+| N02 | negative | ✅ | search_docs | 근거 부족 | 0 | - |
 | N03 | negative | ✅ | - | 범위 밖 질문 | 0 | - |
 | E01 | edge | ✅ | grade_answer | 대기 문제 없음 | 0 | - |
 | E02 | edge | ✅ | grade_answer | 대기 문제 없음 | 0 | - |
@@ -225,10 +225,7 @@ D. Delegate each remaining question to a subagent and keep the key findings in a
 - 답변:
 
 ```
-공식 문서 구절에 따르면 다음 내용이 근거입니다: ## How tool use works  Tools differ primarily by where the code runs. **Client tools** (including user-defined tools and tools with Anthropic-defined schemas, such as `bash` and `text_editor`) run in 
-
-참고 문서:
-- https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
+공식 문서 스냅샷(과 웹 폴백)에서 이 질문의 근거를 찾지 못했습니다(근거 부족). 질문을 더 구체적으로 바꾸거나 Claude·Anthropic 공식 문서 주제로 물어봐 주세요.
 ```
 
 ### N02 (negative)
@@ -237,11 +234,7 @@ D. Delegate each remaining question to a subagent and keep the key findings in a
 - 답변:
 
 ```
-공식 문서 구절에 따르면 다음 내용이 근거입니다: ## How tool use works  Tools differ primarily by where the code runs. **Client tools** (including user-defined tools and tools with Anthropic-defined schemas, such as `bash` and `text_editor`) run in 
-
-참고 문서:
-- https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview
-- https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works
+공식 문서 스냅샷(과 웹 폴백)에서 이 질문의 근거를 찾지 못했습니다(근거 부족). 질문을 더 구체적으로 바꾸거나 Claude·Anthropic 공식 문서 주제로 물어봐 주세요.
 ```
 
 ### N03 (negative)
