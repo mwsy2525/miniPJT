@@ -321,13 +321,20 @@ def bank_status_lines() -> list[str]:
 
 
 def next_round() -> int:
-    """evaluation/round{N}_report.md 중 가장 큰 N의 다음 번호를 돌려준다."""
-    nums = [int(m.group(1)) for p in EVAL_DIR.glob("round*_report.md") if (m := re.fullmatch(r"round(\d+)_report\.md", p.name))]
+    """evaluation/history/run{NN}_report.md 중 가장 큰 번호의 다음 번호를 돌려준다."""
+    nums = [int(m.group(1)) for p in (EVAL_DIR / "history").glob("run*_report.md")
+            if (m := re.fullmatch(r"run(\d+)_report\.md", p.name))]
     return max(nums, default=0) + 1
 
 
-def write_reports(summary: dict[str, Any], res: dict[str, Any], round_no: int | None = None) -> None:
-    """report.json과 report.md(최신 결과)를 쓴다. round_no가 있으면 같은 내용을 round{N}_report.md로도 남긴다."""
+def write_reports(summary: dict[str, Any], res: dict[str, Any], round_no: int | None = None,
+                  as_round2: bool = False) -> None:
+    """report.json과 report.md(최신 결과)를 쓴다.
+
+    round_no가 있으면 같은 내용을 history/run{NN}_report.md로 남긴다(실측 회차 기록).
+    as_round2면 제출용 2차 자체 평가 리포트(round2_report.md)도 이 결과로 바꾼다.
+    round1_report.md(1차)는 이 스크립트가 건드리지 않는다.
+    """
     (EVAL_DIR / "report.json").write_text(
         json.dumps({"summary": summary, "results": res["results"]}, ensure_ascii=False, indent=2), encoding="utf-8")
     L = ["# 평가 리포트" + (f" · 라운드 {round_no}" if round_no else ""), "",
@@ -356,7 +363,14 @@ def write_reports(summary: dict[str, Any], res: dict[str, Any], round_no: int | 
               "- 답변:", "", "```", r["answer"][:1500], "```", ""]
     (EVAL_DIR / "report.md").write_text("\n".join(L), encoding="utf-8")
     if round_no:
-        (EVAL_DIR / f"round{round_no}_report.md").write_text("\n".join(L), encoding="utf-8")
+        hist = EVAL_DIR / "history"
+        hist.mkdir(exist_ok=True)
+        (hist / f"run{round_no:02d}_report.md").write_text("\n".join(L), encoding="utf-8")
+        if as_round2:
+            note = (f"- 2차 자체 평가: 개선 후 최신 실측 결과다(실측 {round_no}회차, "
+                    f"evaluation/history/run{round_no:02d}_report.md와 같은 내용). 중간 회차는 evaluation/history/에 있다.")
+            (EVAL_DIR / "round2_report.md").write_text(
+                "\n".join(["# 2차 자체 평가 리포트 (개선 후)", "", note] + L[2:]), encoding="utf-8")
 
 
 def main() -> int:
@@ -364,6 +378,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--offline", action="store_true", help="Bedrock 대신 규칙 기반 mock으로 하네스 점검")
     ap.add_argument("--csv", default=str(EVAL_DIR / "test_queries.csv"))
+    ap.add_argument("--as-round2", action="store_true", help="이 실측 결과를 제출용 round2_report.md(2차)로도 저장")
     args = ap.parse_args()
     if not args.offline:
         from dotenv import load_dotenv
@@ -377,7 +392,8 @@ def main() -> int:
         install_offline_mocks()
     res = run(load_rows(Path(args.csv)))
     summary = summarize(res, args.offline)
-    write_reports(summary, res, None if args.offline else next_round())  # 라운드 리포트는 실측만 남긴다
+    # 회차 기록은 실측만 남긴다
+    write_reports(summary, res, None if args.offline else next_round(), as_round2=args.as_round2 and not args.offline)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0 if summary["meets_thresholds"] else 1
 

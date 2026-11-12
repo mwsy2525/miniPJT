@@ -56,7 +56,7 @@ curl -X POST http://127.0.0.1:8000/query -H "Content-Type: application/json" \
 
 # 5. 테스트(오프라인, Bedrock 불필요)와 자체 평가(Bedrock 필요)
 uv run pytest -q
-uv run python evaluation/run_eval.py          # evaluation/round{N}_report.md 생성
+uv run python evaluation/run_eval.py          # evaluation/history/run{NN}_report.md 생성 (--as-round2: round2_report.md도 갱신)
 uv run python evaluation/run_eval.py --offline # 가짜 모델로 평가 스크립트만 점검
 
 # 6. MCP 서버(stdio)
@@ -85,10 +85,10 @@ docker run --rm -p 8000:8000 --env-file .env ccarf-mock-exam
 
 ## 인-아웃 세트 통과율 (자체 평가)
 - 1차 (첫 실측, `evaluation/round1_report.md`): 18 / 20 통과
-- 2차 (개선 후 최신 실측, `evaluation/round14_report.md`): 20 / 20 통과
+- 2차 (개선 후 최신 실측, `evaluation/round2_report.md`): 20 / 20 통과
 - 개선폭: +2 건 (주요 개선 사항: 채점 후 후속 질문이 도구를 부르지 않던 문제, 프롬프트 인젝션에 거절 사유 코드를 남기지 않던 문제)
 
-실측은 모두 14번 돌렸고 회차마다 `evaluation/round{N}_report.md`가 있다. 1~4회차는 Claude Sonnet 4.5, 7회차부터는 Sonnet 4.6이다. 5·6회차는 Bedrock 일일 토큰 한도로 HTTP 502가 섞여 결과가 유효하지 않고, 8회차는 원본 리포트를 잃어 요약만 남겼다. 1차와 2차 사이에 문제 은행이 10문항에서 43문항으로 늘었고 모델도 바뀌었으므로, 두 수치는 같은 조건의 비교가 아니다.
+실측은 모두 14번 돌렸다. 1차는 1회차, 2차는 14회차 결과이고, 모든 회차의 리포트는 `evaluation/history/run{NN}_report.md`에 있다. 1~4회차는 Claude Sonnet 4.5, 7회차부터는 Sonnet 4.6이다. 5·6회차는 Bedrock 일일 토큰 한도로 HTTP 502가 섞여 결과가 유효하지 않고, 8회차는 원본 리포트를 잃어 요약만 남겼다. 1차와 2차 사이에 문제 은행이 10문항에서 43문항으로 늘었고 모델도 바뀌었으므로, 두 수치는 같은 조건의 비교가 아니다.
 
 합격 기준(SERVICE.md 5번)과 14회차 결과: 전체 통과 100%(기준 85%), 도구 호출 정확도 100%(90%), negative·guardrail 8/8(100%), 정상 질문 거절 0건(0건), edge 금지어 위반 0건, DB 쓰기 횟수 일치 100%.
 
