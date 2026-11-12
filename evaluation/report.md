@@ -1,6 +1,7 @@
-# 평가 리포트
+# 평가 리포트 · 라운드 13
 
 - 모드: **live-bedrock**, 시드 1234, 웹 폴백 off, 실행마다 새 임시 DB
+- 실행 시각: 2026-11-12 16:53, 모델: global.anthropic.claude-sonnet-4-6
 
 ## 요약
 - 전체 통과: 20/20 (100%)
@@ -9,18 +10,18 @@
 - 과잉 거절(positive): 0
 - edge·guardrail forbidden 위반: 0
 - db_writes 일치율: edge·guardrail 100%, 전체 100%
-- 응답 시간 p95: 10.97s (기록만)
-- RAG 지표(기록만): {'search_docs_answers': 2, 'with_sources': 2, 'avg_contexts': 4, 'note': '측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)'}
+- 응답 시간 p95: 6.51s (기록만)
+- RAG 지표(기록만): {'search_docs_answers': 2, 'with_sources': 2, 'avg_contexts': 3, 'note': '측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)'}
 - 합격 기준 충족: **True**
 
 ## 문제 은행 현황
 | 영역 | 근거 부족 | 검수 exam 문항 | 검수 study 문항 |
 |---|---|---|---|
-| Domain 1 Agentic Architecture & Orchestration | 아니오 | 2 | 0 |
-| Domain 2 Tool Design & MCP Integration | 아니오 | 2 | 0 |
-| Domain 3 Claude Code Configuration & Workflows | 아니오 | 2 | 0 |
-| Domain 4 Prompt Engineering & Structured Output | 아니오 | 2 | 0 |
-| Domain 5 Context Management & Reliability | 아니오 | 2 | 0 |
+| Domain 1 Agentic Architecture & Orchestration | 아니오 | 8 | 0 |
+| Domain 2 Tool Design & MCP Integration | 아니오 | 6 | 0 |
+| Domain 3 Claude Code Configuration & Workflows | 아니오 | 10 | 0 |
+| Domain 4 Prompt Engineering & Structured Output | 아니오 | 7 | 0 |
+| Domain 5 Context Management & Reliability | 아니오 | 12 | 0 |
 - 근거 부족 영역: 없음
 - study 문항 수: 0
 
@@ -59,20 +60,20 @@
 정답입니다. 선택: B
 
 ## 문제·보기 (한영 병기)
-**Q.** A nightly job sends each document to Claude, which calls a lookup_customer tool mid-request and then finishes the extraction using the tool result. To cut costs, the team wants to move this job to the Message Batches API. What should you tell them?
-**문제.** 야간 작업이 문서마다 Claude에 요청을 보내고, Claude는 요청 도중 lookup_customer 도구를 호출한 뒤 그 결과로 추출을 마친다. 팀은 비용을 줄이려고 이 작업을 Message Batches API로 옮기려 한다. 무엇이라고 조언해야 하는가?
+**Q.** A pipeline extracts line items from long purchase orders using structured outputs. For the longest documents, the JSON occasionally fails to parse, and the team is confused because structured outputs are supposed to guarantee schema compliance. What should the pipeline do?
+**문제.** 파이프라인이 structured outputs로 긴 구매 주문서에서 품목을 추출한다. 가장 긴 문서에서 가끔 JSON 파싱이 실패하는데, 팀은 structured outputs가 스키마 준수를 보장한다고 알고 있어서 혼란스러워한다. 파이프라인은 어떻게 처리해야 하는가?
 
-- A. Move it as is; the 24-hour processing window gives enough time for the tool calls to complete. / 그대로 옮긴다. 24시간 처리 시간이면 도구 호출이 끝나기에 충분하다.
-- B. lookup_customer is your own client-side tool, and a batch request cannot run it and send its result back within the same request, so fetch the customer data beforehand and include it in each request. / lookup_customer는 직접 실행하는 클라이언트 도구라서 배치 요청 하나 안에서 실행하고 결과를 돌려줄 수 없다. 고객 데이터를 미리 조회해 각 요청에 넣는다. ✅
-- C. Move it as is and use custom_id to send tool results back into the running batch. / 그대로 옮기고 custom_id로 실행 중인 배치에 도구 결과를 돌려보낸다.
-- D. Move it as is and set tool_choice to "any" so the tool is always called inside the batch. / 그대로 옮기고 tool_choice를 "any"로 설정해 배치 안에서 도구가 항상 호출되게 한다.
+- A. Resend the identical request whenever parsing fails, since schema violations are random and rare. / 스키마 위반은 무작위로 드물게 생기므로, 파싱이 실패할 때마다 같은 요청을 그대로 다시 보낸다.
+- B. Check stop_reason; if it is "max_tokens", retry the request with a higher max_tokens value. / stop_reason을 확인하고, "max_tokens"이면 max_tokens 값을 늘려 요청을 다시 보낸다. ✅
+- C. Add strict: true to every tool definition so that the JSON output is also guaranteed to parse. / 모든 도구 정의에 strict: true를 추가해 JSON 출력도 파싱이 보장되게 한다.
+- D. Treat parse failures as safety refusals and rephrase the prompt to avoid triggering refusals. / 파싱 실패를 안전상 거절로 보고, 거절이 일어나지 않도록 프롬프트를 바꿔 쓴다.
 
 ## 문제 의도
-- 평가 포인트: Message Batches API가 맞는 작업과 맞지 않는 작업, 특히 클라이언트 도구를 요청 중에 실행·반환할 수 없다는 제약을 아는지 확인한다.
-- 함정: 야간 작업이라 지연에 관대하다는 점과 custom_id의 용도를 혼동하게 만든다.
+- 평가 포인트: structured outputs를 써도 스키마와 맞지 않는 출력이 나올 수 있는 경우(토큰 한도 도달)를 알고, stop_reason으로 원인을 확인해 알맞은 재시도를 설계하는지 확인한다.
+- 함정: structured outputs의 보장을 절대적인 것으로 믿게 하거나, 원인을 확인하지 않고 같은 재시도·다른 기능·거절 대응으로 넘어가게 만든다.
 
 ## 정답인 이유
-배치의 각 요청은 독립적으로 처리되므로, 직접 실행해야 하는 클라이언트 도구는 요청 도중 결과를 돌려줄 수 없다(응답이 tool_use에서 멈춘다). 웹 검색 같은 서버 도구는 Anthropic 쪽에서 실행되어 배치 안에서도 쓸 수 있다. 필요한 데이터를 미리 조회해 프롬
+공식 문서는 structured outputs가 대부분의 경우 스키마 준수를 보장하지만 예외가 있다고 밝힌다. 응답이 max_tokens 한도에 걸려 잘리면 stop_reason이 "max_tokens"가 되고 출력이 불완전해 스키마와 맞지 않을 수 있으며, 이때는 max_tokens 값을 늘려 다시 시
 ```
 
 ### P02 (positive)
@@ -82,26 +83,20 @@
 
 ```
 ## 채점 결과
-오답입니다. 선택: A / 정답: C
+오답입니다. 선택: A / 정답: D
 
 ## 문제·보기 (한영 병기)
-**Q.** In a research system, a coordinator agent first runs a web search subagent and then spawns a synthesis subagent through the Agent tool (called the Task tool in earlier versions) with the prompt "Write a report on the topic." The report ignores everything the web search subagent found. What is the most likely cause?
-**문제.** 리서치 시스템에서 코디네이터 에이전트가 먼저 웹 검색 서브에이전트를 실행한 뒤, Agent 도구(이전 버전의 Task 도구)로 "Write a report on the topic."이라는 프롬프트를 주어 종합(synthesis) 서브에이전트를 생성했다. 보고서에는 웹 검색 서브에이전트가 찾은 내용이 전혀 반영되지 않았다. 가장 가능성 높은 원인은 무엇인가?
+**Q.** Production metrics show your agent averages 4+ API loops per resolution. Analysis reveals Claude often requests get_customer and lookup_order in separate sequential turns even when both are needed initially. What is the most effective way to reduce the number of loops? What is the most effective way to reduce loops?
+**문제.** 프로덕션 지표상 에이전트는 해결 한 건당 평균 4번 이상의 API 루프를 돕니다. 분석해 보니 처음부터 둘 다 필요한 경우에도 Claude가 get_customer와 lookup_order를 별도의 순차 턴으로 요청하는 경우가 많습니다. 루프 수를 줄이는 가장 효과적인 방법은 무엇인가요? 루프를 줄이는 가장 효과적인 방법은?
 
-- A. The synthesis subagent lacks the Read tool, so it cannot open the search subagent's memory. / 종합 서브에이전트에 Read 도구가 없어서 검색 서브에이전트의 메모리를 열 수 없다.
-- B. The synthesis subagent's max_tokens setting is too low to read the search results. / 종합 서브에이전트의 max_tokens 설정이 검색 결과를 읽기에 너무 작다.
-- C. Subagents do not inherit the coordinator's conversation history, and the search findings were not included in the synthesis subagent's prompt. / 서브에이전트는 코디네이터의 대화 기록을 물려받지 않는데, 검색 결과를 종합 서브에이전트의 프롬프트에 넣지 않았다. ✅
-- D. The two subagents were spawned in different turns, so they could not share a context window. / 두 서브에이전트가 서로 다른 턴에 생성되어 컨텍스트 창을 공유하지 못했다.
+- A. Implement speculative execution that automatically calls likely-needed tools in parallel with any requested tool and returns all results regardless of what was requested. / 요청된 도구와 함께 필요할 것 같은 도구를 병렬로 자동 호출하고, 무엇을 요청했든 모든 결과를 반환하는 추측 실행을 구현한다.
+- B. Increase max_tokens to give Claude more room to plan and naturally combine tool requests. / max_tokens를 늘려 Claude가 계획하고 도구 요청을 자연스럽게 묶을 여유를 준다.
+- C. Create composite tools like get_customer_with_orders that bundle common lookup combinations into single calls. / 자주 쓰는 조회 조합을 한 번의 호출로 묶는 get_customer_with_orders 같은 복합 도구를 만든다.
+- D. Instruct Claude in the prompt to bundle tool requests into one turn and return all results together before the next API call. / 프롬프트에서 Claude에게 도구 요청을 한 턴에 묶으라고 지시하고, 다음 API 호출 전에 모든 결과를 함께 반환한다. ✅
 
 ## 문제 의도
-- 평가 포인트: 서브에이전트가 격리된 컨텍스트로 동작하므로 필요한 맥락을 프롬프트로 명시적으로 넘겨야 한다는 것을 아는지 확인한다.
-- 함정: 서브에이전트끼리 메모리나 컨텍스트를 자동으로 공유한다는 오해를 노린다.
-
-## 정답인 이유
-서브에이전트는 부모의 대화 기록을 자동으로 물려받지 않고 호출 사이에 메모리도 공유하지 않는다. 앞선 에이전트의 결과는 코디네이터가 서브에이전트 프롬프트에 직접 넣어 줘야 한다.
-
-## 오답인 이유
-- A: 서브에이전트 사이에 읽을 수 있는 공유
+- 평가 포인트: 서로 의존하지 않는 도구 호출을 한 턴에 병렬로 요청하게 하는 동작이 프롬프트로 조절 가능하다는 것을 알고, 이를 활용해 에이전트 루프 횟수를 줄이는지 확인한다.
+- 함정: 추측 실행, 토큰 한도 증가, 복합 도구처럼 구조를 바꾸는 방
 ```
 
 ### P03 (positive)
@@ -139,16 +134,16 @@
 - 답변:
 
 ```
-[시험 범위 · Domain 3 · Task 3.2]
+[시험 범위 · Domain 3 · Task 3.6]
 
-문제 ID: q-d3-001
+문제 ID: q-d3-002
 
-Your team has a project skill that analyzes the whole codebase and produces several pages of exploratory output. Developers complain that after running it, the main conversation is cluttered and later answers lose focus. Which SKILL.md frontmatter setting best addresses this?
+Your CI pipeline runs Claude Code to review pull requests, and a script must post each finding as an inline PR comment. The script currently fails because the review output is free-form prose. What is the best way to get machine-parseable findings?
 
-A. argument-hint, so developers are prompted for the directory to analyze.
-B. allowed-tools: Read, so the skill can only read files.
-C. context: fork, so the skill runs in an isolated sub-agent context.
-D. Move the skill's instructions into the project CLAUDE.md so they are always loaded.
+A. Run claude -p with --output-format json and --json-schema that defines the finding fields.
+B. Run Claude Code in interactive mode and capture the terminal output with a parser.
+C. Add "Respond only in JSON" to the prompt and extract the JSON with a regular expression.
+D. Add the --batch flag so Claude Code returns results in a structured batch format.
 
 답안을 A~D 중 하나로 보내 주세요.
 ```
@@ -161,14 +156,14 @@ D. Move the skill's instructions into the project CLAUDE.md so they are always l
 ```
 [시험 범위 · Domain 5 · Task 5.4]
 
-문제 ID: q-d5-002
+문제 ID: q-d5-007
 
-During a long session exploring a large legacy codebase, Claude starts giving inconsistent answers and refers to "typical patterns" instead of the specific classes it found earlier. You still have several investigation questions left. What is the best way to continue?
+You’re adding error-handling wrappers around external API calls across a 120-file codebase. The work has three phases: (1) discover all call sites and patterns, (2) collaboratively design the error-handling approach, and (3) implement wrappers consistently. In Phase 1, Claude generates large output listing hundreds of call sites with context, quickly filling the context window before discovery finishes. Which approach is most effective to complete the task while maintaining implementation consistency?
 
-A. Disable Grep and Glob so Claude reads every file in full before answering.
-B. Keep asking in the same session but tell Claude to be more specific.
-C. Start a new session with no summary and re-explore the codebase from scratch.
-D. Delegate each remaining question to a subagent and keep the key findings in a scratchpad file that later steps reference.
+A. Use an Explore subagent for Phase 1 to isolate verbose discovery output and return a summary, then continue Phases 2–3 in the main conversation.
+B. Do all phases in the main conversation, periodically using /compact to reduce context usage while moving through files.
+C. Switch to headless mode with --continue, passing explicit context summaries between batch calls to maintain continuity.
+D. Define the error-handling pattern in CLAUDE.md, then process files in batches across multiple sessions relying on the shared memory file for consistency.
 
 답안을 A~D 중 하나로 보내 주세요.
 ```
@@ -191,9 +186,9 @@ D. Delegate each remaining question to a subagent and keep the key findings in a
 ## 오답 목록
 | 문항 ID | 영역 | 범위 | 고른 답 | 정답 |
 |---|---|---|---|---|
-| q-d1-002 | Domain 1 | exam | A | C |
+| q-d1-008 | Domain 1 | exam | A | D |
 | q-d2-001 | Domain 2 | exam | A | B |
-| q-d1-001 | Domain 1 | exam | B | A |
+| q-d1-003 | Domain 1 | exam | A | B |
 
 ## 학습용(study) 문항 풀이 수
 0문항
@@ -206,28 +201,19 @@ D. Delegate each remaining question to a subagent and keep the key findings in a
 
 ```
 [AI 개념 힌트 · 정답을 알려 주지 않으며 채점과 무관합니다]
-Agentic loop(클라이언트 툴 기반)의 종료 기준은 **`stop_reason`** 값으로 판단해야 합니다.
+Agentic loop는 `ResultMessage`의 `subtype` 필드로 종료 상태를 확인하며, 다음 경우에 끝납니다:
 
-핵심 패턴은 다음과 같습니다:
+- **`success`**: Claude가 정상적으로 태스크를 완료했을 때
+- **`error_max_turns`**: `maxTurns` 한도에 도달했을 때
+- **`error_max_budget_usd`**: `maxBudgetUsd` 한도에 도달했을 때
+- **`error_during_execution`**: 요청 취소 등 오류로 루프가 중단됐을 때
+- **`error_max_structured_output_retries`**: 유효한 structured output을 설정된 재시도 한도 내에 생성하지 못했을 때
 
-- **루프를 계속하는 조건**: `stop_reason == "tool_use"` → Claude가 툴 호출을 요청한 상태이므로 툴을 실행하고 결과를 돌려줘야 합니다.
-- **루프를 종료하는 조건**: `stop_reason`이 `"tool_use"`가 **아닌** 다른 값일 때 — 예: `"end_turn"` (정상 완료), `"max_tokens"`, `"stop_sequence"`, `"refusal"` 등.
-
-즉, 루프의 정석적인 구조는:
-
-```
-while stop_reason == "tool_use":
-    툴 실행 → tool_result 반환 → 다음 요청 전송
-# stop_reason이 "end_turn" 등이 되면 루프 종료
-```
-
-**왜 텍스트 내용으로 판단하면 안 되는가?**
-Claude는 툴 호출(`tool_use` 블록)과 텍스트 블록을 **같은 응답에 함께** 포함할 수 있습니다. 따라서 응답에 텍스트가 있다고 해서 루프를 끝내거나, "done" 같은 문구를 찾거나, 커스텀 JSON 마커를 파싱하는 방식은 신뢰할 수 없습니다. `stop_reason`만이 Claude가 실제로 작업을 마쳤는지 여부를 명확하게 알려주는 공식 신호입니다.
+`result` 필드(최종 텍스트 출력)는 `success` 상태일 때만 존재하므로, 반드시 `subtype`을 먼저 확인한 후 읽어야 합니다.
 
 참고 문서:
-- https://platform.claude.com/docs/en/agents-and-tools/tool-use/how-tool-use-works
-- https://code.claude.com/docs/en/agent-sdk/agent-loop
 - https://code.claude.com/docs/en/hooks
+- https://code.claude.com/docs/en/agent-sdk/agent-loop
 ```
 
 ### P08 (positive)
@@ -237,61 +223,19 @@ Claude는 툴 호출(`tool_use` 블록)과 텍스트 블록을 **같은 응답�
 
 ```
 [AI 답변 · 검수된 해설과 채점 결과를 바꾸지 않습니다]
-공식 문서의 **"What subagents inherit"** 섹션이 이 문제의 핵심 근거입니다.
+공식 문서의 핵심 근거는 **"Run parallel research"** 섹션에 있습니다.
 
----
+문서는 병렬 서브에이전트 조사가 **"research paths don't depend on each other"(조사 경로가 서로 의존하지 않을 때)** 가장 잘 동작한다고 명시합니다. 즉, 각 서브에이전트가 **독립적인 영역**을 탐색해야 한다는 전제가 깔려 있습니다.
 
-## 📄 공식 문서 근거
+또한 문서는 서브에이전트 사용 가이드에서 **"tasks can run in parallel … involve independent workstreams that don't need to share state"** 일 때 서브에이전트를 쓰라고 권장합니다. 반대로 **"tasks where you need to maintain context across steps"** 에는 직접 작업하라고 합니다.
 
-### 1. 서브에이전트의 컨텍스트는 항상 새로 시작된다
+경고(WARNING) 섹션에서는 **"each subagent spends tokens of its own while it runs"** 라고 명시해, 서브에이전트가 실행되는 동안 이미 토큰을 소비한다고 경고합니다. 이것이 사후 중복 제거(A)가 낭비를 막지 못하는 이유의 근거입니다.
 
-> *"Unless the subagent is a fork, its context window starts fresh, with no parent conversation"*
+따라서 위임 **전에** 코디네이터가 겹치지 않는 범위로 작업을 나누는 것(B)이 문서가 전제하는 올바른 병렬 조사 패턴입니다.
 
-fork가 아닌 일반 서브에이전트는 **부모의 대화 기록 없이 컨텍스트가 새로 시작**됩니다.
-
----
-
-### 2. 부모 → 서브에이전트로 전달되는 것은 오직 Agent tool의 prompt string뿐
-
-> *"The only content you pass from parent to subagent is the Agent tool's prompt string, so include any file paths, error messages, or decisions the subagent needs directly in that prompt."*
-
-Agent tool을 호출할 때 넘기는 **prompt 문자열만이 유일한 전달 수단**입니다. 따라서 웹 검색 서브에이전트가 찾은 결과를 synthesis 서브에이전트에게 전달하려면, 코디네이터가 그 내용을 **직접 prompt에 포함**시켜야 합니다.
-
----
-
-### 3. 공식 문서의 상속 표 (받는 것 vs 받지 못하는 것)
-
-| 서브에이전트가 받는 것 | 서브에이전트가 받지 못하는 것 |
-|---|---|
-| Agent tool의 prompt | **부모의 대화 기록 및 tool 결과** |
-| 자체 system prompt | 부모의 system prompt |
-| Tool 정의 | Preloaded skill content (별도 지정 없으면) |
-
-표에서 명시적으로 **"The parent's conversation history or tool results"** 는 서브에이전트에게 전달되지 않는다고 나와 있습니다.
-
----
-
-## 🔍 문제 상황에 적용하면
-
-| 단계 | 실제 동작 |
-|---|---|
-| 코디네이터가 웹 검색 서브에이전트 실행 | 검색 결과는 코디네이터의 대화 기록에 저장됨 |
-| 코디네이터가 synthesis 서브에이전트를 `"Write a report on the topic."` 으로 호출 | 검색 결과가 prompt에 포함되지 않음 |
-| synthesis 서브에이전트 시작 | 컨텍스트가 새로 시작되어 검색 결과를 전혀 모름 |
-| 보고서 작성 | 검색 결과 없이 작성 → 무시된 것처럼 보임 |
-
----
-
-## ✅ 올바른 구현 방법
-
-코디네이터가 synthesis 서브에이전트를 호출할 때 prompt에 검색 결과를 직접 포함해야 합니다:
-
-```
-"Write a report on the topic. 
-Here are the search findings: [검색 결과 전체 내용]"
-```
-
-공식 문서 표현 그대로: *"include 
+참고 문서:
+- https://code.claude.com/docs/en/sub-agents
+- https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices
 ```
 
 ### N01 (negative)
