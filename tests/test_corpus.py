@@ -168,6 +168,19 @@ def test_general_fallback_unknown_stays_evidence_gap(monkeypatch):
     assert ctx.refusal_reason == "근거 부족"
 
 
+def test_unknown_identifier_in_passages_is_evidence_gap(monkeypatch):
+    """구절이 검색돼도 질문 속 식별자(quantum-entangle)가 구절에 없으면 LLM 답변 없이 근거 부족으로 간다."""
+    hit = {"text": "CLI flags: --model, --print, --output-format.", "score": 0.9, "url": "https://code.claude.com/docs/en/cli-reference",
+           "doc_path": "code/cc-cli-reference.md", "chunk_id": "cc-cli-reference#cli-flags"}
+    monkeypatch.setattr(retriever, "search", lambda *a, **k: [hit])
+    monkeypatch.setattr(T, "llm_answer", lambda *a, **k: pytest.fail("구절 기반 답변 호출"))
+    ctx = T.ToolContext()
+    T.run_search_docs(ctx, "Claude Code의 quantum-entangle 플래그는 무엇인가요?")
+    assert ctx.refusal_reason == "근거 부족" and ctx.contexts == []
+    assert ctx.tool_calls[-1]["args"]["missing_terms"] == ["quantum-entangle"]
+    assert T.missing_identifier_terms("--output-format 옵션 알려줘", [hit["text"]]) == []
+
+
 def test_general_fallback_not_used_for_pre_grading_hint(monkeypatch):
     """채점 전 힌트에서는 일반 지식 답변을 쓰지 않는다(정답 유출 방지)."""
     monkeypatch.setattr(retriever, "search", lambda *a, **k: [])

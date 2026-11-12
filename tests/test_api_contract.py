@@ -61,7 +61,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(T, "llm_rewrite_query", lambda q: "stop_reason tool_use")
     monkeypatch.setattr(T, "llm_answer", lambda *a, **k: T.SearchAnswer(answer="stop_reason은 tool_use/end_turn을 구분합니다."))
     monkeypatch.setattr(retriever, "search", lambda q, k=4, domain=None, store=None: [
-        {"text": "passage text", "doc_path": "platform/handling-stop-reasons.md",
+        {"text": "passage text about stop_reason", "doc_path": "platform/handling-stop-reasons.md",
          "chunk_id": "handling-stop-reasons#end-turn", "url": "https://x/y", "score": 0.9}])
     T.set_seed(1)
     return TestClient(A.app)
@@ -118,7 +118,7 @@ def test_search_docs_and_invalid_answer(client):
     s = post(client, question="stop_reason이 뭐야?")
     assert s["trace"]["tool_calls"][0]["name"] == "search_docs"
     assert s["trace"]["tool_calls"][0]["args"]["search_query_en"] == "stop_reason tool_use"
-    assert s["contexts"] == ["passage text"]
+    assert s["contexts"] == ["passage text about stop_reason"]
     assert s["trace"]["sources"][0]["chunk_id"] == "handling-stop-reasons#end-turn"
     post(client, question="문제 내줘", user_id="u", session_id="s")
     bad = post(client, question="B,C", user_id="u", session_id="s")
