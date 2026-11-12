@@ -20,7 +20,7 @@ WEB_INDEX = ROOT / "web" / "index.html"
 
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
-    """시험지형 웹 화면(web/index.html)을 돌려준다. 화면은 POST /query만 호출한다."""
+    """시험지형 웹 화면(web/index.html)을 돌려준다. 버튼은 /quiz·/grade·/progress, 질문 창은 /query를 호출한다."""
     return FileResponse(WEB_INDEX, media_type="text/html")
 
 
