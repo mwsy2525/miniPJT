@@ -10,6 +10,19 @@ source:
   exam_code: CCAR-F
   item_format_in_scope: single-answer 4-option  # 공식 시험의 multiple-response 문항은 이번 범위 밖
 
+# 시험 기본 정보(Exam Guide v1.0 3절·12절·15절). AI 일반 지식 답변의 참고 사실로 넘긴다.
+exam_facts:
+  - "Credential: Claude Certified Architect – Foundations (exam code CCAR-F), offered by Anthropic"
+  - "Number of items: 60, multiple-choice and multiple-response"
+  - "Exam structure: 4 scenarios drawn from a bank of 6"
+  - "Time limit: 120 minutes"
+  - "Delivery: proctored, online or test center, delivered by Pearson VUE; registration through the Anthropic Partner Academy"
+  - "Passing score: scaled score of 720 on a scale of 100–1,000"
+  - "Exam fee: $125 USD"
+  - "Validity: 12 months; on-time renewal is a free, non-proctored assessment"
+  - "Retake waiting periods: 14 days after the first failed attempt, 30 days after the second, 90 days after the third; up to four attempts in a rolling twelve-month period"
+  - "Exam Guide version 1.0, effective July 2026"
+
 domains:
   - id: 1
     name: Agentic Architecture & Orchestration

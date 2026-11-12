@@ -11,6 +11,7 @@ def _mocks(tmp_path, monkeypatch):
     monkeypatch.setenv("PROGRESS_DB_PATH", str(tmp_path / "p.db"))
     monkeypatch.setattr(T, "llm_rewrite_query", lambda q: "tool use")
     monkeypatch.setattr(T, "llm_answer", lambda *a, **k: T.SearchAnswer(answer="답변입니다."))
+    monkeypatch.setattr(T, "llm_general_answer", lambda *a, **k: T.GeneralAnswer(unknown=True))
 
 
 def _doc_for(domain):
@@ -123,3 +124,33 @@ def test_web_fallback_filters_domains_and_errors(monkeypatch):
 
     monkeypatch.setattr(httpx, "post", boom)
     assert retriever.web_search("q") == []
+
+
+def test_general_knowledge_fallback_when_no_evidence(monkeypatch):
+    """문서 근거가 없으면 표시를 붙여 AI 일반 지식으로 답하고, contexts와 sources는 비운다."""
+    monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
+    monkeypatch.setattr(T, "llm_general_answer", lambda *a, **k: T.GeneralAnswer(answer="Claude는 Anthropic의 모델입니다."))
+    ctx = T.ToolContext()
+    out = T.run_search_docs(ctx, "Claude가 뭐야?")
+    assert out.startswith(T.GENERAL_LABEL) and "Anthropic의 모델" in out
+    assert ctx.refusal_reason is None and ctx.contexts == [] and ctx.sources == []
+    assert ctx.tool_calls[-1]["args"]["answer_basis"] == "ai_general_knowledge"
+
+
+def test_general_fallback_unknown_stays_evidence_gap(monkeypatch):
+    """AI도 모르는 질문은 계속 근거 부족으로 거절한다."""
+    monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
+    ctx = T.ToolContext()
+    T.run_search_docs(ctx, "quantum-entangle 플래그?")
+    assert ctx.refusal_reason == "근거 부족"
+
+
+def test_general_fallback_not_used_for_pre_grading_hint(monkeypatch):
+    """채점 전 힌트에서는 일반 지식 답변을 쓰지 않는다(정답 유출 방지)."""
+    monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
+    monkeypatch.setattr(T, "llm_general_answer", lambda *a, **k: pytest.fail("힌트에서 일반 지식 호출"))
+    q = T.load_questions()[0]
+    T.set_pending("u", "s", q["id"])
+    ctx = T.ToolContext(user_id="u", session_id="s")
+    T.run_search_docs(ctx, "이 개념 설명해줘")
+    assert ctx.refusal_reason == "근거 부족"

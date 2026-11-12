@@ -138,6 +138,7 @@ def install_offline_mocks() -> None:
     A.get_agent_llm = lambda: Router()
     T.llm_rewrite_query = rewrite
     T.llm_answer = answer
+    T.llm_general_answer = lambda q, extra="": T.GeneralAnswer(unknown=True)  # 가짜 LLM은 모르는 것으로 둔다
     retriever.search = lexical_search
     retriever.similarity_threshold = lambda: 0.5
 
