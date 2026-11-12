@@ -1,0 +1,11 @@
+langchain>=1.0
+langgraph
+langchain-aws
+langchain-chroma
+chromadb
+fastapi
+uvicorn
+httpx
+pyyaml
+python-dotenv
+pytest
