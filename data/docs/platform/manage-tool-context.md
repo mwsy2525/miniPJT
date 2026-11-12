@@ -1,0 +1,65 @@
+---
+title: Manage tool context
+url: https://platform.claude.com/docs/en/agents-and-tools/tool-use/manage-tool-context
+description: Choose among tool search, programmatic tool calling, prompt caching, and context editing to manage context bloat.
+---
+
+Tool definitions and accumulated `tool_result` blocks consume your context window. Long-running agents with many tools or many turns can exhaust available context before the task is complete. Four approaches address this at different points in the pipeline.
+
+## The four approaches
+
+Each approach targets a different source of context pressure. Pick the one that matches where your tokens are going.
+
+| Approach                  | What it reduces                         | When it fits                                                  | Learn more                                                                                                                 |
+| ------------------------- | --------------------------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Tool search               | Tool definitions loaded upfront         | Many tools (10+), most of which aren’t needed every turn      | [Tool search tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool)                         |
+| Programmatic tool calling | `tool_result` roundtrips                | Chains of tool calls that can run as a single script          | [Programmatic tool calling](https://platform.claude.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling)       |
+| Prompt caching            | Token cost of repeated tool definitions | Stable tool definitions across many requests                  | [Tool use with prompt caching](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-use-with-prompt-caching) |
+| Context editing           | Old `tool_result` blocks in history     | Long conversations where early results are no longer relevant | [Context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing)                                   |
+
+### Tool search
+
+Tool search keeps tool definitions out of the context window until Claude asks for them. Instead of loading 50 tool schemas into context upfront, you mark them with `defer_loading: true`, add a tool search tool, and let Claude discover them on demand. This trades a small amount of latency (one extra turn to look up a tool) for a large reduction in baseline context usage.
+
+### Programmatic tool calling
+
+Programmatic tool calling collapses a sequence of tool calls into a single code block that Claude writes and Anthropic’s code execution sandbox runs. Rather than five roundtrips of `tool_use` and `tool_result`, Claude emits one script that calls all five functions from within the sandbox. The intermediate results never enter the conversation history.
+
+### Prompt caching
+
+Prompt caching doesn’t reduce the number of tokens in context, but it reduces what you pay for them on subsequent requests. If your tool definitions are stable, cache them once and reuse the cached prefix across thousands of requests. This is the right choice when your list of tools is large but fixed.
+
+### Context editing
+
+Context editing removes old `tool_result` blocks from the conversation history once they’ve served their purpose. A long agent loop might produce hundreds of intermediate results that were useful at the time but are no longer needed. Context editing lets you trim them without restarting the conversation.
+
+## Combining approaches
+
+You can use these approaches together, because each solves a different part of the problem. A long-running agent might use tool search to load fewer tool definitions, prompt caching to amortize the cost of the remaining definitions, and context editing to trim stale results as the conversation grows.
+
+A reasonable starting point for a high-volume agent:
+
+1. Enable prompt caching on your tool definitions from the start. Cache writes carry a 25 percent markup over base input pricing, which pays back on the second request that hits the cache.
+2. Add tool search once you have 10 or more tools or your baseline context usage becomes noticeable.
+3. Add context editing once individual conversations start running long enough that early results become irrelevant.
+4. Consider programmatic tool calling if you notice repetitive chains of small tool calls that could run as a single batch.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Tool search tool" icon="magnifying-glass" href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool">
+    Load tool definitions on demand instead of upfront.
+  </Card>
+
+  <Card title="Programmatic tool calling" icon="code" href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/programmatic-tool-calling">
+    Collapse tool-call chains into a single executable script.
+  </Card>
+
+  <Card title="Tool use with prompt caching" icon="database" href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-use-with-prompt-caching">
+    Cache tool definitions across requests to cut token costs.
+  </Card>
+
+  <Card title="Context editing" icon="scissors" href="https://platform.claude.com/docs/en/build-with-claude/context-editing">
+    Trim stale tool results from long-running conversations.
+  </Card>
+</CardGroup>

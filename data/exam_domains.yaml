@@ -1,0 +1,100 @@
+# CCAR-F 출제 영역 설정
+# 출처: Claude Certified Architect – Foundations Exam Guide v1.0 (Effective July 2026, Exam code CCAR-F)
+# 가이드가 바뀌면 이 파일을 수동으로 갱신한다.
+# evidence_gap: 문서 스냅샷(data/docs/) 수집 후 판정한다. 수집 전에는 null.
+
+source:
+  title: Claude Certified Architect – Foundations Exam Guide
+  version: "1.0"
+  effective: 2026-07
+  exam_code: CCAR-F
+  item_format_in_scope: single-answer 4-option  # 공식 시험의 multiple-response 문항은 이번 범위 밖
+
+domains:
+  - id: 1
+    name: Agentic Architecture & Orchestration
+    weight: 27
+    evidence_gap: null
+    related_docs: [agent-sdk-overview, agent-sdk-agent-loop, agent-sdk-subagents, agent-sdk-hooks, agent-sdk-sessions, handling-stop-reasons, how-tool-use-works]
+    task_statements:
+      "1.1": Design and implement agentic loops for autonomous task execution
+      "1.2": Orchestrate multi-agent systems with coordinator-subagent patterns
+      "1.3": Configure subagent invocation, context passing, and spawning
+      "1.4": Implement multi-step workflows with enforcement and handoff patterns
+      "1.5": Apply Agent SDK hooks for tool call interception and data normalization
+      "1.6": Design task decomposition strategies for complex workflows
+      "1.7": Manage session state, resumption, and forking
+  - id: 2
+    name: Tool Design & MCP Integration
+    weight: 18
+    evidence_gap: null
+    related_docs: [define-tools, handle-tool-calls, tool-use-overview, agent-sdk-mcp, agent-sdk-custom-tools, cc-mcp, mcp-spec-tools, mcp-spec-resources]
+    task_statements:
+      "2.1": Design effective tool interfaces with clear descriptions and boundaries
+      "2.2": Implement structured error responses for MCP tools
+      "2.3": Distribute tools appropriately across agents and configure tool choice
+      "2.4": Integrate MCP servers into Claude Code and agent workflows
+      "2.5": Select and apply built-in tools (Read, Write, Edit, Bash, Grep, Glob) effectively
+  - id: 3
+    name: Claude Code Configuration & Workflows
+    weight: 20
+    evidence_gap: null
+    related_docs: [cc-memory, cc-claude-directory, cc-commands, cc-skills, cc-sub-agents, cc-permission-modes, cc-common-workflows, cc-headless, cc-cli-reference]
+    task_statements:
+      "3.1": Configure CLAUDE.md files with appropriate hierarchy, scoping, and modular organization
+      "3.2": Create and configure custom slash commands and skills
+      "3.3": Apply path-specific rules for conditional convention loading
+      "3.4": Determine when to use plan mode vs direct execution
+      "3.5": Apply iterative refinement techniques for progressive improvement
+      "3.6": Integrate Claude Code into CI/CD pipelines
+  - id: 4
+    name: Prompt Engineering & Structured Output
+    weight: 20
+    evidence_gap: null
+    related_docs: [prompt-engineering-overview, prompting-best-practices, structured-outputs, strict-tool-use, define-tools, batch-processing]
+    task_statements:
+      "4.1": Design prompts with explicit criteria to improve precision and reduce false positives
+      "4.2": Apply few-shot prompting to improve output consistency and quality
+      "4.3": Enforce structured output using tool use and JSON schemas
+      "4.4": Implement validation, retry, and feedback loops for extraction quality
+      "4.5": Design efficient batch processing strategies
+      "4.6": Design multi-instance and multi-pass review architectures
+  - id: 5
+    name: Context Management & Reliability
+    weight: 15
+    evidence_gap: null
+    related_docs: [context-windows, manage-tool-context, agent-sdk-sessions, agent-sdk-subagents, cc-sub-agents, handle-tool-calls]
+    task_statements:
+      "5.1": Manage conversation context to preserve critical information across long interactions
+      "5.2": Design effective escalation and ambiguity resolution patterns
+      "5.3": Implement error propagation strategies across multi-agent systems
+      "5.4": Manage context effectively in large codebase exploration
+      "5.5": Design human review workflows and confidence calibration
+      "5.6": Preserve information provenance and handle uncertainty in multi-source synthesis
+
+scenarios:
+  - {id: 1, name: Customer Support Resolution Agent, primary_domains: [1, 2, 5]}
+  - {id: 2, name: Code Generation with Claude Code, primary_domains: [3, 5]}
+  - {id: 3, name: Multi-Agent Research System, primary_domains: [1, 2, 5]}
+  - {id: 4, name: Developer Productivity with Claude, primary_domains: [2, 3, 1]}
+  - {id: 5, name: Claude Code for Continuous Integration, primary_domains: [3, 4]}
+  - {id: 6, name: Structured Data Extraction, primary_domains: [4, 5]}
+
+# 가이드 Out-of-Scope 주제: 거절하지 않고 search_docs로 답하되 "시험 출제 범위 밖" 표시를 붙인다.
+out_of_scope_topics:
+  - Fine-tuning Claude models or training custom models
+  - Claude API authentication, billing, or account management
+  - Detailed implementation of specific programming languages or frameworks
+  - Deploying or hosting MCP servers (infrastructure, networking, container orchestration)
+  - Claude's internal architecture, training process, or model weights
+  - Constitutional AI, RLHF, or safety training methodologies
+  - Embedding models or vector database implementation details
+  - Computer use (browser automation, desktop interaction)
+  - Vision/image analysis capabilities
+  - Streaming API implementation or server-sent events
+  - Rate limiting, quotas, or API pricing calculations
+  - OAuth, API key rotation, or authentication protocol details
+  - Specific cloud provider configurations (AWS, GCP, Azure)
+  - Performance benchmarking or model comparison metrics
+  - Prompt caching implementation details (beyond knowing it exists)
+  - Token counting algorithms or tokenization specifics
