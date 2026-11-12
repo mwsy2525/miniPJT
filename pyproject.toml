@@ -1,0 +1,25 @@
+[project]
+name = "ccarf-mock-exam-agent"
+version = "0.1.0"
+description = "CCAR-F 모의시험 에이전트 (POST /query)"
+requires-python = ">=3.11"
+dependencies = [
+    "langchain>=1.0",
+    "langgraph",
+    "langchain-aws",
+    "langchain-chroma",
+    "chromadb",
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "pyyaml",
+    "python-dotenv",
+    "pytest",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

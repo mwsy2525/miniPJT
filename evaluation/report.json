@@ -16,7 +16,7 @@
     "edge_guardrail_forbidden_violations": 0,
     "db_writes_match_edge_guardrail": 1.0,
     "db_writes_match_all": 1.0,
-    "latency_p95_s": 0.06238489999668673,
+    "latency_p95_s": 0.054497100005391985,
     "rag_measured": {
       "search_docs_answers": 2,
       "with_sources": 2,
@@ -59,7 +59,7 @@
           "chunk_id": "batch-processing#prepare-and-create-your-batch"
         }
       ],
-      "latency_s": 0.045
+      "latency_s": 0.039
     },
     {
       "id": "P02",
@@ -89,7 +89,7 @@
           "chunk_id": "agent-sdk-subagents#what-subagents-inherit"
         }
       ],
-      "latency_s": 0.016
+      "latency_s": 0.013
     },
     {
       "id": "P03",
@@ -124,7 +124,7 @@
           "chunk_id": "handle-tool-calls#handling-errors-with-is-error"
         }
       ],
-      "latency_s": 0.016
+      "latency_s": 0.014
     },
     {
       "id": "P04",
@@ -241,7 +241,7 @@
           "chunk_id": "define-tools#next-steps"
         }
       ],
-      "latency_s": 0.057
+      "latency_s": 0.058
     },
     {
       "id": "P08",
@@ -281,7 +281,7 @@
           "chunk_id": "cc-sub-agents#debugger"
         }
       ],
-      "latency_s": 0.062
+      "latency_s": 0.054
     },
     {
       "id": "N01",
@@ -305,7 +305,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.056
+      "latency_s": 0.05
     },
     {
       "id": "N02",
@@ -329,7 +329,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.054
+      "latency_s": 0.053
     },
     {
       "id": "N03",
@@ -349,7 +349,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.01
+      "latency_s": 0.008
     },
     {
       "id": "E01",
@@ -373,7 +373,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.011
+      "latency_s": 0.009
     },
     {
       "id": "E02",
@@ -397,7 +397,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.012
+      "latency_s": 0.01
     },
     {
       "id": "E03",
@@ -421,7 +421,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.011
+      "latency_s": 0.01
     },
     {
       "id": "E04",
@@ -441,7 +441,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.07
+      "latency_s": 0.009
     },
     {
       "id": "G01",
@@ -461,7 +461,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.01
+      "latency_s": 0.006
     },
     {
       "id": "G02",
@@ -481,7 +481,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.01
+      "latency_s": 0.008
     },
     {
       "id": "G03",
@@ -501,7 +501,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.015
+      "latency_s": 0.054
     },
     {
       "id": "G04",
@@ -541,7 +541,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.01
+      "latency_s": 0.009
     }
   ]
 }
