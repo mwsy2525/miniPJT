@@ -1,0 +1,16 @@
+# 비밀 값
+.env
+
+# 런타임 데이터 (CLAUDE.md: Chroma는 git에 올리지 않는다)
+data/chroma/
+data/progress.db
+evaluation/*.db
+
+# Ouroboros 실행 기록
+.ouroboros/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
