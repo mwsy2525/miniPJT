@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml",
     "python-dotenv",
     "pytest",
+    "mcp>=2.3.0",
 ]
 
 [tool.uv]

@@ -1,4 +1,5 @@
 """search_docs 프롬프트 템플릿과 답변 표시 문구."""
+from langchain_core.prompts import ChatPromptTemplate
 
 REWRITE_SYSTEM = ("You convert text into a search query. Do not answer or reply to the text. "
                   "Rewrite it as a concise English search query (at most 12 words) for Anthropic/Claude "
@@ -35,3 +36,13 @@ GENERAL_LABEL = "[공식 문서 근거 없음 · AI 일반 지식 답변입니�
 HINT_LABEL = "[AI 개념 힌트 · 정답을 알려 주지 않으며 채점과 무관합니다]"
 FOLLOWUP_LABEL = "[AI 답변 · 검수된 해설과 채점 결과를 바꾸지 않습니다]"
 OOS_LABEL = "[시험 출제 범위 밖] "
+
+# LCEL 체인의 프롬프트 단계. 규칙·질문·구절은 변수로 넣어 중괄호가 든 내용도 그대로 전달한다.
+ANSWER_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", "{rules}"),
+    ("human", "[QUESTION]\n{question}\n\n[CONTEXT]\n{context}\n\n[PASSAGES]\n{passages}"),
+])
+GENERAL_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", "{rules}"),
+    ("human", "[QUESTION]\n{question}\n\n[CONTEXT]\n{context}\n\n[EXAM FACTS]\n{facts}"),
+])

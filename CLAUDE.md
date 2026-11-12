@@ -10,6 +10,10 @@
 - 벡터 저장소는 Chroma를 쓰고 `data/chroma/`에 영속 저장한다. git에는 올리지 않는다.
 - 진도와 세션 상태는 SQLite `data/progress.db`에 저장한다.
 - HTTP 서버는 FastAPI를 쓴다.
+- `search_docs`의 답변 생성은 LCEL 체인(`ChatPromptTemplate | 모델.with_structured_output(Pydantic)`)으로 만든다.
+- 에이전트에는 미들웨어를 붙인다: 모델 호출 재시도(실패하면 오류를 올려 502), 한 요청의 모델 호출 4회·도구 호출 2회 상한.
+- `POST /query` 요청마다 LLM·도구 호출 단계(시간, 모델, 토큰 수)를 `data/traces/날짜.jsonl`에 한 줄로 남긴다(.env `TRACE_LOG_ENABLED`, `TRACE_LOG_DIR`). API 키는 필요 없다. LangSmith는 .env에 `LANGSMITH_TRACING=true`와 키를 넣으면 함께 켜진다. 트레이스 폴더는 git에 올리지 않는다.
+- 도구 4개는 MCP 서버(`python -m src.api.mcp_server`, stdio)로도 노출한다. 규칙과 응답 형태는 `POST /query`와 같다.
 
 ## 폴더 구조
 제출 규약 경로(`src/agent.py`, `src/tools.py`, `src/retriever.py`)는 진입점으로 유지하고, 구현은 `src/` 아래 도메인 폴더에 둔다.
@@ -17,7 +21,8 @@
 src/agent.py          진입점(제출 규약): `uvicorn src.agent:app`, POST /query. 구현은 api·orchestration
 src/tools.py          진입점(제출 규약): 도구 4개와 관련 이름을 다시 내보내기만 한다
 src/retriever.py      진입점(제출 규약): src/retrieval/service.py를 다시 내보내기만 한다
-src/api/              HTTP 계층. routes.py(FastAPI 앱, /, /query, /quiz, /grade, /progress), schemas.py(요청·응답 스키마)
+src/api/              외부 인터페이스. routes.py(FastAPI 앱, /, /query, /quiz, /grade, /progress), schemas.py(요청·응답 스키마),
+                      mcp_server.py(도구 4개를 노출하는 MCP 서버)
 src/orchestration/    에이전트. service.py(ID별 도구 목록, create_agent, 채점 전 사전 거절, 응답 조립),
                       prompts.py(시스템 프롬프트, 도구 설명, 사유 코드별 거절 안내문), schemas.py(AgentReply)
 src/quiz/             generate_quiz. service.py(출제 로직), schemas.py(도구 입력)
@@ -29,7 +34,7 @@ src/retrieval/        공식 문서 코퍼스. service.py(청크 생성, Chroma 
 src/question_bank/    service.py(data/questions.json, data/exam_domains.yaml 읽기)
 src/sessions/         service.py(SQLite 대기 문제와 시도 기록 읽기·쓰기)
 src/shared/           여러 도메인이 함께 쓰는 것만. config.py(ROOT, .env, env), llm.py(Bedrock 채팅·임베딩 클라이언트,
-                      응답 텍스트 추출), context.py(ToolContext, 사유 코드 10개)
+                      응답 텍스트 추출), context.py(ToolContext, 사유 코드 10개), tracing.py(요청 트레이스 기록)
 data/docs/            공식 문서 스냅샷 + manifest.json
 data/questions.json   검수된 문제 은행
 data/exam_domains.yaml 출제 영역

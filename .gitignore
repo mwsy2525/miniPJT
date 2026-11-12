@@ -14,3 +14,6 @@ __pycache__/
 *.pyc
 .venv/
 .pytest_cache/
+
+# 요청 트레이스 기록(런타임 생성)
+data/traces/

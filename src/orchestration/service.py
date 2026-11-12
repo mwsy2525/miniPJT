@@ -5,6 +5,7 @@ import re
 from typing import Any, Optional
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelCallLimitMiddleware, ModelRetryMiddleware, ToolCallLimitMiddleware
 from langchain.agents.structured_output import ToolStrategy
 from langchain_core.messages import HumanMessage
 from langchain_core.tools import StructuredTool
@@ -20,7 +21,7 @@ from src.quiz.schemas import QuizToolInput
 from src.search import service as search
 from src.search.schemas import SearchToolInput
 from src.sessions import service as sessions
-from src.shared import llm
+from src.shared import llm, tracing
 from src.shared.context import REFUSAL_CODES, ToolContext
 
 TOOL_NAMES = ("search_docs", "generate_quiz", "grade_answer", "get_progress")
@@ -97,7 +98,29 @@ def _pre_grading_guard(ctx: ToolContext, question: str) -> bool:
                 and _QUESTION_FORM.search(question) and search.is_pre_grading_leak_request(question))
 
 
+def agent_middleware() -> list:
+    """에이전트 미들웨어: 모델 호출 일시 오류 재시도, 한 요청의 모델·도구 호출 횟수 상한(폭주 방지)."""
+    return [
+        ModelRetryMiddleware(max_retries=1, on_failure="error"),  # 실패하면 숨기지 않고 올려 502로 응답한다
+        ModelCallLimitMiddleware(run_limit=4, exit_behavior="end"),
+        ToolCallLimitMiddleware(run_limit=2, exit_behavior="end"),
+    ]
+
+
 def run_query(question: str, user_id: Optional[str], session_id: Optional[str]) -> dict[str, Any]:
+    """요청 하나를 처리하고 LLM·도구 호출 단계를 트레이스 파일에 남긴다."""
+    recorder = tracing.TraceRecorder()
+    try:
+        response = _run_agent(question, user_id, session_id, recorder)
+    except Exception as exc:
+        tracing.write("/query", question, None, recorder, error=type(exc).__name__)
+        raise
+    tracing.write("/query", question, response, recorder)
+    return response
+
+
+def _run_agent(question: str, user_id: Optional[str], session_id: Optional[str],
+               recorder: tracing.TraceRecorder) -> dict[str, Any]:
     """에이전트를 실행하고 {answer, contexts, trace}를 조립한다."""
     ctx = ToolContext(user_id=user_id, session_id=session_id)
     if _pre_grading_guard(ctx, question):  # LLM과 도구를 거치지 않고 바로 거절한다
@@ -111,8 +134,9 @@ def run_query(question: str, user_id: Optional[str], session_id: Optional[str]) 
         get_agent_llm(), build_tools(ctx),
         system_prompt=P.SYSTEM_PROMPT + "\n" + status,
         response_format=ToolStrategy(AgentReply),
+        middleware=agent_middleware(),
     )
-    out = agent.invoke({"messages": [HumanMessage(content=question)]})
+    out = agent.invoke({"messages": [HumanMessage(content=question)]}, config={"callbacks": [recorder]})
 
     if ctx.answer is not None:
         answer, refusal = ctx.answer, ctx.refusal_reason

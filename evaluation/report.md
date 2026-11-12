@@ -1,7 +1,7 @@
-# 평가 리포트 · 라운드 13
+# 평가 리포트 · 라운드 14
 
 - 모드: **live-bedrock**, 시드 1234, 웹 폴백 off, 실행마다 새 임시 DB
-- 실행 시각: 2026-11-12 16:53, 모델: global.anthropic.claude-sonnet-4-6
+- 실행 시각: 2026-11-12 17:01, 모델: global.anthropic.claude-sonnet-4-6
 
 ## 요약
 - 전체 통과: 20/20 (100%)
@@ -10,7 +10,7 @@
 - 과잉 거절(positive): 0
 - edge·guardrail forbidden 위반: 0
 - db_writes 일치율: edge·guardrail 100%, 전체 100%
-- 응답 시간 p95: 6.51s (기록만)
+- 응답 시간 p95: 6.83s (기록만)
 - RAG 지표(기록만): {'search_docs_answers': 2, 'with_sources': 2, 'avg_contexts': 3, 'note': '측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)'}
 - 합격 기준 충족: **True**
 
@@ -201,15 +201,15 @@ D. Define the error-handling pattern in CLAUDE.md, then process files in batches
 
 ```
 [AI 개념 힌트 · 정답을 알려 주지 않으며 채점과 무관합니다]
-Agentic loop는 `ResultMessage`의 `subtype` 필드로 종료 상태를 확인하며, 다음 경우에 끝납니다:
+Agentic loop는 `ResultMessage`의 `subtype` 필드로 종료 상태를 확인하며, 다음 조건에서 끝납니다:
 
-- **`success`**: Claude가 정상적으로 태스크를 완료했을 때
+- **`success`**: Claude가 작업을 정상적으로 완료했을 때
 - **`error_max_turns`**: `maxTurns` 한도에 도달했을 때
 - **`error_max_budget_usd`**: `maxBudgetUsd` 한도에 도달했을 때
 - **`error_during_execution`**: 요청 취소 등 오류로 루프가 중단됐을 때
 - **`error_max_structured_output_retries`**: 유효한 structured output을 설정된 재시도 한도 내에 생성하지 못했을 때
 
-`result` 필드(최종 텍스트 출력)는 `success` 상태일 때만 존재하므로, 반드시 `subtype`을 먼저 확인한 후 읽어야 합니다.
+`result` 필드(최종 텍스트 출력)는 `success` 상태일 때만 존재하므로, 반드시 `subtype`을 먼저 확인한 후 읽어야 합니다. 또한 `Stop` hook에서 `{"ok": false, "reason": "..."}` 를 반환하면 루프를 계속 진행시킬 수 있고, `{"ok": true}` 를 반환해야 종료가 허용됩니다.
 
 참고 문서:
 - https://code.claude.com/docs/en/hooks
@@ -225,13 +225,13 @@ Agentic loop는 `ResultMessage`의 `subtype` 필드로 종료 상태를 확인�
 [AI 답변 · 검수된 해설과 채점 결과를 바꾸지 않습니다]
 공식 문서의 핵심 근거는 **"Run parallel research"** 섹션에 있습니다.
 
-문서는 병렬 서브에이전트 조사가 **"research paths don't depend on each other"(조사 경로가 서로 의존하지 않을 때)** 가장 잘 동작한다고 명시합니다. 즉, 각 서브에이전트가 **독립적인 영역**을 탐색해야 한다는 전제가 깔려 있습니다.
+문서는 병렬 서브에이전트 조사가 **"research paths don't depend on each other"(조사 경로가 서로 의존하지 않을 때)** 가장 잘 동작한다고 명시합니다. 예시도 `authentication`, `database`, `API modules`처럼 **처음부터 서로 겹치지 않는 영역을 나눠** 각 서브에이전트에 할당하는 방식을 보여줍니다.
 
-또한 문서는 서브에이전트 사용 가이드에서 **"tasks can run in parallel … involve independent workstreams that don't need to share state"** 일 때 서브에이전트를 쓰라고 권장합니다. 반대로 **"tasks where you need to maintain context across steps"** 에는 직접 작업하라고 합니다.
+또한 문서는 경고(WARNING)로 **"each subagent spends tokens of its own while it runs"**라고 명시합니다. 즉, 서브에이전트는 실행되는 동안 각자 토큰을 소비하므로, 실행이 끝난 뒤 중복을 제거하는 방식(A)은 이미 낭비된 토큰을 되돌릴 수 없습니다.
 
-경고(WARNING) 섹션에서는 **"each subagent spends tokens of its own while it runs"** 라고 명시해, 서브에이전트가 실행되는 동안 이미 토큰을 소비한다고 경고합니다. 이것이 사후 중복 제거(A)가 낭비를 막지 못하는 이유의 근거입니다.
+서브에이전트 사용 지침 샘플에서도 **"independent workstreams that don't need to share state"**일 때 서브에이전트를 쓰라고 권장하며, 공유 상태(C)가 필요한 구조는 적합하지 않음을 시사합니다.
 
-따라서 위임 **전에** 코디네이터가 겹치지 않는 범위로 작업을 나누는 것(B)이 문서가 전제하는 올바른 병렬 조사 패턴입니다.
+결론적으로, 위임 **전에** 코디네이터가 연구 범위를 명시적으로 분리하는 것(B)이 문서가 설명하는 병렬 서브에이전트의 올바른 사용 패턴입니다.
 
 참고 문서:
 - https://code.claude.com/docs/en/sub-agents

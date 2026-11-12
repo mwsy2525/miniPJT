@@ -34,25 +34,24 @@ def llm_rewrite_query(question: str) -> str:
 
 
 def llm_answer(question: str, passages: list[str], mode: str, extra: str, oos_topics: list[str]) -> SearchAnswer:
-    """[LLM 2·3] 구절 기반 한국어 답변을 구조화 출력으로 만든다. mode는 general/hint/followup."""
+    """[LLM 2·3] 구절 기반 한국어 답변을 LCEL 체인(프롬프트 | 구조화 출력 모델)으로 만든다. mode는 general/hint/followup."""
     rules = P.ANSWER_RULES + [P.OOS_RULE + "; ".join(oos_topics)]
     if mode == "hint":
         rules.append(P.HINT_RULE)
     if mode == "followup":
         rules.append(P.FOLLOWUP_RULE)
-    body = f"[QUESTION]\n{question}\n\n[CONTEXT]\n{extra or '(없음)'}\n\n[PASSAGES]\n" + "\n---\n".join(passages)
-    model = llm.get_llm().with_structured_output(SearchAnswer)
-    return model.invoke([SystemMessage(content="\n".join(rules)), HumanMessage(content=body)])
+    chain = P.ANSWER_PROMPT | llm.get_llm().with_structured_output(SearchAnswer)
+    return chain.invoke({"rules": "\n".join(rules), "question": question, "context": extra or "(없음)",
+                         "passages": "\n---\n".join(passages)})
 
 
 def llm_general_answer(question: str, extra: str = "") -> GeneralAnswer:
-    """[LLM 4] 문서 근거가 없는 Claude·Anthropic 질문에 AI 일반 지식으로 답한다. 실패하면 unknown으로 본다."""
+    """[LLM 4] 문서 근거가 없는 Claude·Anthropic 질문에 AI 일반 지식으로 답한다(LCEL 체인). 실패하면 unknown으로 본다."""
     try:
-        model = llm.get_llm().with_structured_output(GeneralAnswer)
         facts = "\n".join(f"- {x}" for x in bank.load_domains().get("exam_facts", []))
-        body = ("[QUESTION]\n" + question + "\n\n[CONTEXT]\n" + (extra or "(없음)")
-                + "\n\n[EXAM FACTS]\n" + (facts or "(없음)"))
-        return model.invoke([SystemMessage(content="\n".join(P.GENERAL_RULES)), HumanMessage(content=body)])
+        chain = P.GENERAL_PROMPT | llm.get_llm().with_structured_output(GeneralAnswer)
+        return chain.invoke({"rules": "\n".join(P.GENERAL_RULES), "question": question,
+                             "context": extra or "(없음)", "facts": facts or "(없음)"})
     except Exception:
         return GeneralAnswer(unknown=True)
 

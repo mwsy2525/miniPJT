@@ -1,0 +1,10 @@
+.env
+.git
+.venv
+.claude
+.ouroboros
+__pycache__/
+*.pyc
+data/progress.db
+data/traces/
+tests/

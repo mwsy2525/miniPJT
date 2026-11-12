@@ -161,3 +161,35 @@ def test_button_routes_work_without_llm(tmp_path, monkeypatch):
     p = c.post("/progress", json={"user_id": "u"}).json()
     assert "정답률" in p["answer"] and p["contexts"] == []
     assert c.post("/quiz", json={"user_id": "u"}).status_code == 422
+
+
+def test_mcp_server_exposes_tools_without_llm(monkeypatch):
+    """MCP 서버가 도구 4개를 노출하고, 출제·채점을 LLM 없이 같은 응답 형태로 돌려준다."""
+    import asyncio
+
+    from src.api.mcp_server import server
+    monkeypatch.setattr(llm, "get_llm", lambda: pytest.fail("LLM 호출 발생"))
+
+    async def scenario():
+        names = {t.name for t in await server.list_tools()}
+        quiz = (await server.call_tool("generate_quiz", {"user_id": "m", "session_id": "ms"})).structured_content
+        graded = (await server.call_tool("grade_answer", {"user_id": "m", "session_id": "ms", "answer": "A"})).structured_content
+        no_id = (await server.call_tool("grade_answer", {"user_id": "", "session_id": "ms", "answer": "A"})).structured_content
+        return names, quiz, graded, no_id
+
+    names, quiz, graded, no_id = asyncio.run(scenario())
+    assert names == {"search_docs", "generate_quiz", "grade_answer", "get_progress"}
+    assert set(quiz) == {"answer", "contexts", "trace"} and quiz["contexts"] == [] and quiz["trace"]["db_writes"] == 1
+    assert graded["trace"]["grading"]["chosen"] == "A" and graded["trace"]["db_writes"] == 2
+    assert no_id["trace"]["refusal_reason"] == "ID 부족" and no_id["trace"]["db_writes"] == 0
+
+
+def test_query_writes_trace_record(client, tmp_path):
+    """POST /query 한 건마다 트레이스 파일에 한 줄이 남고, 도구 호출 단계(span)가 들어 있다."""
+    post(client, question="문제 내줘", user_id="u", session_id="s")
+    files = list((tmp_path / "traces").glob("*.jsonl"))
+    assert len(files) == 1
+    rec = json.loads(files[0].read_text(encoding="utf-8").splitlines()[-1])
+    assert rec["route"] == "/query" and rec["tool_calls"][0]["name"] == "generate_quiz" and rec["db_writes"] == 1
+    assert any(s["kind"] == "tool" and s["name"] == "generate_quiz" for s in rec["spans"])
+    assert any(s["kind"] == "llm" for s in rec["spans"]) and rec["latency_ms"] >= 0
