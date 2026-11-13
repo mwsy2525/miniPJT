@@ -127,6 +127,23 @@ constraints:
 - ChatBedrockConverse는 temperature=0으로 호출해 평가 결과가 덜 흔들리게 한다.
 - 'Non-goals: 정식 웹 UI(최소 시험지형 화면 web/index.html 하나만 GET /로 제공하고, 화면 버튼은 LLM 없는 전용 경로 POST /quiz·/grade·/progress를, 질문 창은 POST /query를 호출), 로그인·인증(user_id를 그대로 신뢰), 적응형 출제, 세트형 모의고사(모의시험은 한 문항씩 출제·채점한다).'
 - 대기 문제가 있어도 search_docs 학습자료 검색은 허용한다. 대기 문제의 정답·해석·번역·해설 요청은 채점 전 해설 요청으로 거절한다.
+- '로컬 검색은 하이브리드 검색이다: 벡터 검색(Chroma)과 BM25 키워드 검색 결과를 RRF로 합친다. 근거 인정은 유사도 기준값(SIMILARITY_THRESHOLD)
+  이상이거나, 키워드 검색 상위(LEXICAL_TOP, 기본 3) 구절이면서 낮은 유사도 기준(LEXICAL_MIN_SIMILARITY, 기본 0.25) 이상일 때다. 세 값은 .env나 설정으로 둔다.'
+- search_docs의 구절 기반 답변과 AI 일반 지식 답변은 LCEL 체인(ChatPromptTemplate | 모델.with_structured_output(Pydantic))으로 만든다.
+- 검색어 변환처럼 짧은 작업은 .env FAST_MODEL_ID 모델로 돌리고, 비어 있으면 BEDROCK_MODEL_ID를 쓴다. LLM·임베딩 클라이언트와 Chroma 저장소는 프로세스 안에서 재사용한다.
+- 'search_docs 답변은 질문이 물은 것에만 짧게 답한다. 채점 직후 맥락(방금 푼 문항의 해설)은 질문이 그 문항을 가리킬 때만 쓰고, 사용자가 묻지 않으면
+  정답·오답 이유와 채점 결과를 설명하지 않는다. 시험 범위 밖 표시는 질문이 그 주제 자체를 물을 때만 붙인다.'
+- 에이전트(create_agent)에는 미들웨어를 붙인다. 모델 호출 재시도(실패하면 오류를 올려 HTTP 502), 한 요청의 모델 호출 4회·도구 호출 2회 상한.
+- 도구 4개는 MCP 서버(src/api/mcp_server.py, stdio)로도 노출한다. 규칙과 응답 형태({answer, contexts, trace})는 POST /query·버튼 경로와 같다.
+- 'POST /query 요청마다 LLM·도구 호출 단계(시간, 모델, 토큰 수)와 결과 요약을 data/traces/날짜.jsonl에 한 줄로 남긴다. API 키 없이 동작하고,
+  .env에 LANGSMITH_TRACING과 키를 넣으면 LangSmith에도 기록된다. 트레이스 폴더는 git에 올리지 않는다. 테스트는 LangSmith로 보내지 않는다.'
+- '평가 리포트 구조: evaluation/round1_report.md는 1차 자체 평가(첫 실측), round2_report.md는 개선 후 2차 자체 평가, 모든 실측 회차는
+  evaluation/history/run{NN}_report.md에 남긴다. 오프라인(가짜 모델) 실행은 회차 기록을 만들지 않는다.'
+- 문서 Q&A는 evaluation/run_ragas.py로 RAGAS 네 지표(context_recall, context_precision, faithfulness, answer_relevancy)를 측정해 기록만 한다(합격선 없음).
+- 'Dockerfile로 실행 이미지를 만든다. .env는 이미지에 넣지 않고 실행할 때 --env-file로 넘긴다. GitHub Actions가 이미지를 빌드하고 자격증명 없이 띄워
+  화면과 LLM 없는 경로(/quiz, /grade, /progress)를 확인한다.'
+- '외부 연습문제를 문제 은행에 넣을 때는 공식 Exam Guide 샘플 문항과 같은 문항, 기존 문항과 개념이 겹치는 문항, 스냅샷 구절이 정답을 직접
+  뒷받침하지 않는 문항, 문서 내용과 어긋나는 문항을 뺀다. 문항 문장은 그대로 두되 해설에서 다른 보기를 알파벳으로 가리키지 않는다.'
 acceptance_criteria:
 - description: POST /query가 question(필수), user_id, session_id를 받아 answer, contexts,
     trace 세 키만 돌려준다. contexts는 항상 list[str]이고, trace는 고정 스키마(tool_calls, problem_id,
@@ -177,7 +194,7 @@ acceptance_criteria:
     guardrail 5)과 컬럼(id, category, input, expected_traits, forbidden, expected_tools,
     note, setup)을 갖춘다. 판정 규칙(도구 집합 정확 일치, refusal_reason 기반 거절 판정, 응답 구조 검사: grading이 null이 아닌 정상 채점 응답의 해설 세트 7항목, 출제 응답의 해석·정답·해설 부재와 빈 contexts·sources, 진도 응답의 정답률 표(exam만)·오답 목록·study 풀이 수 일치, negative·guardrail 응답의 refusal_reason이 note의 사유 코드와 일치)을 따른 격리된 평가 실행의 리포트가 합격 기준을 충족한다: 전체 통과 85% 이상, 도구 호출 정확도 90% 이상,
     negative·guardrail 100% 통과, 과잉 거절 0건, edge·guardrail의 forbidden 위반 0건과 db_writes
-    기대값 100% 일치. RAG 지표와 응답 시간 p95는 측정값만 기록한다.'
+    기대값 100% 일치. RAG 지표와 응답 시간 p95는 측정값만 기록한다. 개선 후 실측 결과는 evaluation/round2_report.md에, 1차 결과는 round1_report.md에 둔다.'
   semantic_ac_key: ac_1e20347c0c65f39f
   verify_command: python -c "import csv,collections;r=list(csv.DictReader(open('evaluation/test_queries.csv',encoding='utf-8')));c=collections.Counter(x['category']
     for x in r);assert {'id','category','input','expected_traits','forbidden','expected_tools','note','setup'}<=set(r[0].keys());assert
@@ -185,6 +202,8 @@ acceptance_criteria:
     && python -m pytest -q tests/test_evaluation_report.py
   expected_artifacts:
   - evaluation/test_queries.csv
+  - evaluation/round1_report.md
+  - evaluation/round2_report.md
   output_assertion: CSV_OK
 assumptions:
 - HTTP 서버 프레임워크는 FastAPI를 가정한다.
@@ -324,7 +343,10 @@ metadata:
   unresolved_slots: []
   recovery_reason: null
   refinement:
-    pass: 2
+    pass: 3
+    pass3_note: 구현 동기화(2026-11-13, 커밋 f7eceea 기준). 마지막 ooo evaluate 승인(54ee5fe) 이후 들어간 하이브리드 검색, LCEL 체인,
+      빠른 모델, 답변 범위 규칙, 에이전트 미들웨어, MCP 서버, 요청 트레이스, 평가 리포트 구조(round1·round2·history), RAGAS 측정,
+      Docker와 CI 빌드 확인, 외부 연습문제 반입 기준을 제약에 추가하고 AC7에 리포트 경로를 넣었다. 목표와 AC 판정 기준은 바꾸지 않았다.
     pass2_note: SERVICE.md 검토 결과 동기화(2026-11-11). 판정 규칙, 거절 사유 코드 10개, 출제 시 contexts 비움, 오답 목록, 이미 푼 문항
       재출제, 타인 진도 거절, 외부 연습문제 허용·유출 문제 금지, 사용 규모를 반영했다.
     provenance_note: 인터뷰 원문 결정 4건(자료 출처, 상태 연결·채점 방식, edge 동작, 합격 기준)은 검증할 수 없는 AC여서 AC 목록에서 뺐다.
