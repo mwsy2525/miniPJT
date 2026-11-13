@@ -47,6 +47,9 @@ def parse_note(note: str) -> dict[str, str]:
 # ------------------------------------------------------------ 오프라인 대체물
 def install_offline_mocks() -> None:
     """Bedrock 호출(에이전트 LLM, 쿼리 변환, 답변 생성, 임베딩 검색)을 규칙 기반으로 대체한다."""
+    # 가짜 모델 실행이 실제 요청 트레이스(data/traces)와 LangSmith에 섞이지 않게 기록을 끈다
+    os.environ["TRACE_LOG_ENABLED"] = "false"
+    os.environ["LANGSMITH_TRACING"] = "false"
     from langchain_core.language_models.chat_models import BaseChatModel
     from langchain_core.messages import AIMessage
     from langchain_core.outputs import ChatGeneration, ChatResult
