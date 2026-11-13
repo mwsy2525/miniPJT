@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -170,26 +172,90 @@ def in_domain(doc_path: str, domain: int) -> bool:
     return bool(d and domain in d.get("domains", []))
 
 
+# ---------------------------------------------------------------- 키워드 검색(BM25)
+_WORD = re.compile(r"[a-z0-9]+(?:[_-][a-z0-9]+)*")
+_LEX_STOP = {
+    "the", "a", "an", "and", "or", "of", "to", "in", "on", "for", "with", "by", "is", "are", "be", "it", "its", "as",
+    "at", "this", "that", "from", "how", "what", "when", "which", "can", "do", "does", "you", "your", "use", "using",
+    "claude", "anthropic", "docs", "documentation", "api", "if", "not", "no", "will", "about", "into", "than",
+}
+
+
+def _norm(word: str) -> str:
+    """복수형 s를 떼어 단수와 같은 말로 본다(definitions → definition)."""
+    return word[:-1] if len(word) > 3 and word.endswith("s") and not word.endswith("ss") else word
+
+
+def _lex_tokens(text: str) -> list[str]:
+    """키워드 검색용 토큰. 소문자 단어, tool_use·few-shot 같은 이음말은 통째와 조각 둘 다 넣는다."""
+    out: list[str] = []
+    for w in _WORD.findall(text.lower()):
+        parts = [w] + (re.split(r"[_-]", w) if ("_" in w or "-" in w) else [])
+        out += [_norm(p) for p in parts if len(p) > 1 and p not in _LEX_STOP]
+    return out
+
+
+@lru_cache(maxsize=1)
+def _lexical_index() -> dict[str, Any]:
+    """청크 전체의 BM25 통계(단어 빈도, 문서 빈도, 평균 길이)를 한 번만 만든다."""
+    docs = [Counter(_lex_tokens(c["text"])) for c in load_chunks()]
+    df: Counter = Counter()
+    for d in docs:
+        df.update(d.keys())
+    n = len(docs)
+    return {"docs": docs, "lens": [sum(d.values()) for d in docs],
+            "avgdl": (sum(sum(d.values()) for d in docs) / n) if n else 1.0,
+            "idf": {t: math.log(1 + (n - f + 0.5) / (f + 0.5)) for t, f in df.items()}}
+
+
+def lexical_search(query: str, k: int = 8, domain: int | None = None) -> list[tuple[dict[str, Any], float]]:
+    """BM25 키워드 검색. 영어 검색어의 단어가 원문에 그대로 있는 구절을 찾는다. (청크, 점수) 목록을 돌려준다."""
+    idx, chunks = _lexical_index(), load_chunks()
+    terms = list(dict.fromkeys(_lex_tokens(query)))
+    k1, b = 1.2, 0.75
+    scored = []
+    for i, c in enumerate(chunks):
+        if domain and domain not in c["domains"]:
+            continue
+        tf, dl = idx["docs"][i], idx["lens"][i]
+        s = sum(idx["idf"].get(t, 0.0) * tf[t] * (k1 + 1) / (tf[t] + k1 * (1 - b + b * dl / idx["avgdl"]))
+                for t in terms if t in tf)
+        if s > 0:
+            scored.append((c, s))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored[:k]
+
+
 def search(query: str, k: int = 4, domain: int | None = None, store=None) -> list[dict[str, Any]]:
-    """로컬 Chroma에서 검색한다. 결과는 {text, doc_path, chunk_id, url, score(코사인 유사도)} 목록이며 chunk_id 중복은 제거한다."""
+    """하이브리드 검색: 벡터 검색과 BM25 키워드 검색 결과를 RRF로 합친다. chunk_id 중복은 제거한다.
+
+    결과는 {text, doc_path, chunk_id, url, score(코사인 유사도), lexical(키워드 검색 상위 여부)} 목록이다.
+    근거로 쓸지는 search_docs가 score와 lexical로 판정한다(키워드 상위 구절은 낮은 유사도 기준을 쓴다).
+    """
     vs = store or _shared_store()
     flt = {f"d{domain}": True} if domain else None  # 문서가 여러 영역에 걸치면 해당 영역 플래그가 모두 True
-    raw = vs.similarity_search_with_score(query, k=k * 3, filter=flt)
-    hits: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for doc, dist in raw:
+    q_emb = vs.embeddings.embed_query(query)  # 검색어 임베딩은 한 번만 만든다
+    vec: dict[str, dict[str, Any]] = {}
+    for doc, dist in vs.similarity_search_by_vector_with_relevance_scores(q_emb, k=k * 3, filter=flt):
         cid = doc.metadata["chunk_id"]
-        if domain and not in_domain(doc.metadata["doc_path"], domain):
+        if cid in vec or (domain and not in_domain(doc.metadata["doc_path"], domain)):
             continue  # 영역 지정 시 그 영역 문서만(안전망)
-        if cid in seen:
-            continue
-        seen.add(cid)
-        full = get_chunk_text(cid) or doc.page_content
-        hits.append({"text": full, "doc_path": doc.metadata["doc_path"], "chunk_id": cid,
-                     "url": doc.metadata["url"], "score": 1.0 - float(dist)})
-        if len(hits) >= k:
-            break
-    return hits
+        vec[cid] = {"doc_path": doc.metadata["doc_path"], "url": doc.metadata["url"], "score": 1.0 - float(dist)}
+    vec_order = list(vec)  # 벡터 검색 순위(키워드로만 찾은 구절을 더하기 전)
+    lex = lexical_search(query, k=k * 2, domain=domain)
+    lex_top = {c["chunk_id"] for c, _ in lex[:int(_env("LEXICAL_TOP", "3"))]}
+    for c, _ in lex:  # 키워드로만 찾은 구절도 같은 기준(코사인 유사도)으로 잴 수 있게 점수를 구한다
+        if c["chunk_id"] not in vec:
+            r = vs.similarity_search_by_vector_with_relevance_scores(q_emb, k=1, filter={"chunk_id": c["chunk_id"]})
+            vec[c["chunk_id"]] = {"doc_path": c["doc_path"], "url": c["url"],
+                                  "score": 1.0 - float(r[0][1]) if r else 0.0}
+    rrf: dict[str, float] = {}
+    for ranking in (vec_order, [c["chunk_id"] for c, _ in lex]):
+        for rank, cid in enumerate(ranking):
+            rrf[cid] = rrf.get(cid, 0.0) + 1.0 / (60 + rank)
+    order = sorted(rrf, key=lambda cid: rrf[cid], reverse=True)
+    return [{"text": get_chunk_text(cid) or "", "doc_path": vec[cid]["doc_path"], "chunk_id": cid,
+             "url": vec[cid]["url"], "score": vec[cid]["score"], "lexical": cid in lex_top} for cid in order[:k]]
 
 
 def web_fallback_enabled() -> bool:

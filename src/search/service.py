@@ -156,7 +156,9 @@ def run_search_docs(ctx: ToolContext, question: str) -> str:
     hits = [h for h in retriever.search(query_en, k=top_k + len(blocked), domain=domain)
             if h["chunk_id"] not in blocked][:top_k]
     threshold = retriever.similarity_threshold()
-    good = [h for h in hits if h["score"] >= threshold]
+    lexical_min = float(_env("LEXICAL_MIN_SIMILARITY", "0.25"))
+    # 키워드 검색 상위 구절은 검색어 단어가 원문에 그대로 있으므로 낮은 유사도 기준(lexical_min)으로 인정한다
+    good = [h for h in hits if h["score"] >= threshold or (h.get("lexical") and h["score"] >= lexical_min)]
     if not good and not domain:  # 영역 지정 질문은 영역 소속을 확인할 수 없는 웹 구절을 쓰지 않는다
         good = [h for h in retriever.web_search(query_en) if h.get("text")]  # 근거 부족일 때만 웹 폴백
 

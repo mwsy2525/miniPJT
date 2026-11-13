@@ -75,8 +75,16 @@ def test_retriever_search_filters_other_domains():
 
     d1_only = next(d for d in retriever.load_manifest()["documents"] if d["domains"] == [1])
 
+    class Emb:
+        def embed_query(self, q):
+            return [0.0]
+
     class Store:
-        def similarity_search_with_score(self, q, k, filter=None):
+        embeddings = Emb()
+
+        def similarity_search_by_vector_with_relevance_scores(self, emb, k, filter=None):
+            if "chunk_id" in (filter or {}):  # 키워드로만 찾은 구절의 유사도 조회
+                return []
             assert filter == {"d2": True}
             return [(Doc(d1_only), 0.1), (Doc(_doc_for(2)), 0.2)]
 
@@ -217,3 +225,24 @@ def test_general_fallback_not_used_for_pre_grading_hint(monkeypatch):
     ctx = T.ToolContext(user_id="u", session_id="s")
     T.run_search_docs(ctx, "이 개념 설명해줘")
     assert ctx.refusal_reason == "근거 부족"
+
+
+def test_lexical_search_finds_exact_terms():
+    """BM25 키워드 검색은 검색어 단어가 원문에 그대로 있는 구절을 찾는다(복수형·이음말 정규화 포함)."""
+    top = [c["chunk_id"] for c, _ in retriever.lexical_search("few-shot examples prompt best practices", k=3)]
+    assert "prompting-best-practices#use-examples-effectively" in top
+    assert all(2 in c["domains"] for c, _ in retriever.lexical_search("tool definitions", k=5, domain=2))
+
+
+def test_lexical_hit_passes_lower_similarity_gate(monkeypatch):
+    """키워드 상위 구절은 유사도가 기준값보다 낮아도 LEXICAL_MIN_SIMILARITY 이상이면 근거로 쓴다. 아니면 근거 부족."""
+    hit = {"text": "Use few-shot examples effectively.", "score": 0.30, "url": "https://x", "doc_path": "platform/prompting-best-practices.md",
+           "chunk_id": "prompting-best-practices#use-examples-effectively"}
+    monkeypatch.setattr(retriever, "search", lambda *a, **k: [{**hit, "lexical": True}])
+    ctx = T.ToolContext()
+    T.run_search_docs(ctx, "few-shot 예시는 몇 개?")
+    assert ctx.refusal_reason is None and ctx.contexts == ["Use few-shot examples effectively."]
+    monkeypatch.setattr(retriever, "search", lambda *a, **k: [{**hit, "lexical": False}])
+    ctx = T.ToolContext()
+    T.run_search_docs(ctx, "few-shot 예시는 몇 개?")
+    assert ctx.contexts == [] and ctx.refusal_reason == "근거 부족"
