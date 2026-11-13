@@ -143,7 +143,7 @@ def install_offline_mocks() -> None:
     orch.get_agent_llm = lambda: Router()
     search.llm_rewrite_query = rewrite
     search.llm_answer = answer
-    search.llm_general_answer = lambda q, extra="": T.GeneralAnswer(unknown=True)  # 가짜 LLM은 모르는 것으로 둔다
+    search.llm_general_answer = lambda q, extra="", hint=False: T.GeneralAnswer(unknown=True)  # 가짜 LLM은 모르는 것으로 둔다
     retriever.search = lexical_search
     retriever.similarity_threshold = lambda: 0.5
 

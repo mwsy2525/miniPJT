@@ -16,7 +16,7 @@
     "edge_guardrail_forbidden_violations": 0,
     "db_writes_match_edge_guardrail": 1.0,
     "db_writes_match_all": 1.0,
-    "latency_p95_s": 7.333180599991465,
+    "latency_p95_s": 6.485677800010308,
     "rag_measured": {
       "search_docs_answers": 2,
       "with_sources": 2,
@@ -59,7 +59,7 @@
           "chunk_id": "handling-stop-reasons#max-tokens"
         }
       ],
-      "latency_s": 1.049
+      "latency_s": 1.108
     },
     {
       "id": "P02",
@@ -89,7 +89,7 @@
           "chunk_id": "prompting-best-practices#optimize-parallel-tool-calling"
         }
       ],
-      "latency_s": 1.136
+      "latency_s": 0.946
     },
     {
       "id": "P03",
@@ -124,7 +124,7 @@
           "chunk_id": "handle-tool-calls#handling-errors-with-is-error"
         }
       ],
-      "latency_s": 1.044
+      "latency_s": 0.98
     },
     {
       "id": "P04",
@@ -148,7 +148,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.42
+      "latency_s": 1.141
     },
     {
       "id": "P05",
@@ -172,7 +172,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.261
+      "latency_s": 0.908
     },
     {
       "id": "P06",
@@ -196,7 +196,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.897
+      "latency_s": 0.994
     },
     {
       "id": "P07",
@@ -206,7 +206,7 @@
       "http": 200,
       "passed": true,
       "reasons": [],
-      "answer": "[AI 개념 힌트 · 정답을 알려 주지 않으며 채점과 무관합니다]\n질문의 의도(agentic loop 종료 시점)와 문제 맥락(서브에이전트 격리 컨텍스트)을 함께 설명합니다.\n\n**Agentic loop 종료 조건**\n- 태스크가 정상 완료되면 `success`로 끝납니다.\n- `maxTurns` 한도에 도달하면 `error_max_turns`로 종료됩니다.\n- `maxBudgetUsd` 한도에 도달하면 `error_max_budget_usd`로 종료됩니다.\n- 실행 중 오류(예: 요청 취소)가 발생하면 `error_during_execution`으로 종료됩니다.\n\n**Stop hook으로 종료 제어**\n- `Stop` / `SubagentStop` hook에서 `{\"ok\": true}`를 반환하면 종료를 허용하고, `{\"ok\": false, \"reason\": \"...\"}` 를 반환하면 Claude가 계속 작업합니다.\n- `decision: \"block\"` + `reason`을 반환해도 종료를 막을 수 있습니다.\n- stop hook이 연속 8회 continuation을 발생시키면 Claude Code가 강제로 턴을 종료합니다.\n\n**문제 속 핵심 개념**\n서브에이전트는 코디네이터의 대화 히스토리를 상속받지 않습니다. 따라서 웹 검색 결과를 합성 서브에이전트의 **프롬프트에 명시적으로 포함**시키지 않으면, 서브에이전트는 그 내용을 알 수 없습니다.\n\n참고 문서:\n- https://code.claude.com/docs/en/hooks\n- https://code.claude.com/docs/en/agent-sdk/agent-loop",
+      "answer": "[AI 개념 힌트 · 정답을 알려 주지 않으며 채점과 무관합니다]\n질문의 의도(agentic loop 종료 시점)와 문제 맥락(서브에이전트 격리 컨텍스트)을 함께 설명합니다.\n\n**Agentic loop 종료 조건** (Stop hook 기준):\n- 사용자가 요청한 모든 태스크가 완료되었을 때\n- 처리해야 할 에러가 없을 때\n- 추가 후속 작업이 필요 없을 때\n\nStop hook에서 `{\"ok\": true}`를 반환하면 루프가 종료되고, `{\"ok\": false, \"reason\": \"...\"}` 를 반환하면 Claude가 계속 작업합니다.\n\n**문제 맥락 관련 핵심 개념**: 서브에이전트는 코디네이터의 대화 히스토리를 상속받지 않습니다. 따라서 웹 검색 서브에이전트가 찾은 결과를 합성 서브에이전트가 사용하려면, 그 내용을 프롬프트에 명시적으로 포함시켜야 합니다. \"Write a report on the topic.\"만 전달하면 검색 결과가 합성 서브에이전트의 컨텍스트에 존재하지 않습니다.\n\n참고 문서:\n- https://code.claude.com/docs/en/hooks\n- https://code.claude.com/docs/en/agent-sdk/agent-loop",
       "refused": false,
       "refusal_reason": null,
       "tools": [
@@ -241,7 +241,7 @@
           "chunk_id": "cc-hooks#subagentstop"
         }
       ],
-      "latency_s": 11.738
+      "latency_s": 10.255
     },
     {
       "id": "P08",
@@ -251,7 +251,7 @@
       "http": 200,
       "passed": true,
       "reasons": [],
-      "answer": "[AI 답변 · 검수된 해설과 채점 결과를 바꾸지 않습니다]\n공식 문서의 핵심 근거는 **\"Run parallel research\"** 섹션에 있습니다.\n\n문서는 병렬 리서치에 대해 이렇게 설명합니다:\n\n> \"Each subagent explores its area independently, then Claude synthesizes the findings. **This works best when the research paths don't depend on each other.**\"\n\n즉, 병렬 서브에이전트는 각자의 조사 경로가 서로 독립적일 때 가장 잘 동작합니다. 예시 코드도 `authentication`, `database`, `API modules`처럼 **명확히 구분된 영역**을 각 서브에이전트에 할당하는 방식을 보여줍니다.\n\n또한 문서의 경고(WARNING)에서는:\n\n> \"each subagent spends tokens of its own while it runs\"\n\n라고 명시하여, 서브에이전트가 실행되는 동안 각자 토큰을 소비한다고 경고합니다. 이는 위임 **전에** 범위를 나누지 않으면 중복 작업으로 토큰이 낭비된다는 근거가 됩니다.\n\n따라서 코디네이터가 **위임 전에** 연구 범위를 겹치지 않게 분리하는 것(B)이 근본 해결책이며, 사후 중복 제거(A)는 이미 토큰을 쓴 뒤의 처리라 낭비를 막지 못합니다.\n\n참고 문서:\n- https://code.claude.com/docs/en/sub-agents\n- https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices",
+      "answer": "[AI 답변 · 검수된 해설과 채점 결과를 바꾸지 않습니다]\n공식 문서의 핵심 근거는 **\"Run parallel research\"** 섹션에 있습니다.\n\n문서는 병렬 리서치에 대해 이렇게 설명합니다:\n\n> \"Each subagent explores its area independently, then Claude synthesizes the findings. **This works best when the research paths don't depend on each other.**\"\n\n즉, 병렬 서브에이전트는 각자의 조사 경로가 서로 독립적일 때 가장 잘 동작합니다. 예시 코드도 `authentication`, `database`, `API modules`처럼 **명확히 구분된 영역**을 각 서브에이전트에 할당하는 방식을 보여줍니다.\n\n또한 문서의 경고(WARNING)에서는:\n\n> \"each subagent spends tokens of its own while it runs\"\n\n라고 명시하여, 서브에이전트가 실행되는 동안 각자 토큰을 소비한다고 경고합니다. 이는 사후 중복 제거(A)가 이미 토큰을 낭비한 뒤의 조치임을 뒷받침합니다.\n\n따라서 **위임 전에 코디네이터가 연구 범위를 겹치지 않게 나누는 것(B)**이 문서가 암묵적으로 전제하는 올바른 설계 방식입니다.\n\n참고 문서:\n- https://code.claude.com/docs/en/sub-agents\n- https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices",
       "refused": false,
       "refusal_reason": null,
       "tools": [
@@ -276,7 +276,7 @@
           "chunk_id": "prompting-best-practices#subagent-orchestration"
         }
       ],
-      "latency_s": 7.333
+      "latency_s": 6.486
     },
     {
       "id": "N01",
@@ -300,7 +300,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 6.16
+      "latency_s": 5.242
     },
     {
       "id": "N02",
@@ -324,7 +324,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 5.315
+      "latency_s": 4.035
     },
     {
       "id": "N03",
@@ -344,7 +344,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 3.543
+      "latency_s": 3.813
     },
     {
       "id": "E01",
@@ -368,7 +368,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.278
+      "latency_s": 1.027
     },
     {
       "id": "E02",
@@ -392,7 +392,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.977
+      "latency_s": 0.982
     },
     {
       "id": "E03",
@@ -416,7 +416,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 1.209
+      "latency_s": 1.102
     },
     {
       "id": "E04",
@@ -436,7 +436,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 2.726
+      "latency_s": 2.82
     },
     {
       "id": "G01",
@@ -456,7 +456,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 4.391
+      "latency_s": 4.381
     },
     {
       "id": "G02",
@@ -476,7 +476,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 3.835
+      "latency_s": 3.727
     },
     {
       "id": "G03",
@@ -496,7 +496,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.011
+      "latency_s": 0.007
     },
     {
       "id": "G04",
@@ -516,7 +516,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 0.005
+      "latency_s": 0.008
     },
     {
       "id": "G05",
@@ -536,7 +536,7 @@
       "forbidden_hits": [],
       "n_contexts": 0,
       "sources": [],
-      "latency_s": 2.887
+      "latency_s": 2.238
     }
   ]
 }

@@ -216,15 +216,35 @@ def test_hint_query_rewrite_sees_problem_stem(monkeypatch):
     assert q["stem_en"] in seen[0] and q["why_correct"] not in seen[0]
 
 
-def test_general_fallback_not_used_for_pre_grading_hint(monkeypatch):
-    """채점 전 힌트에서는 일반 지식 답변을 쓰지 않는다(정답 유출 방지)."""
+def test_general_fallback_for_pre_grading_hint_without_answer_key(monkeypatch):
+    """채점 전 힌트도 문서 근거가 없으면 일반 지식으로 답한다. 정답 키·해설은 넘기지 않고, 힌트 표시를 붙인다."""
+    seen = {}
     monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
-    monkeypatch.setattr(search, "llm_general_answer", lambda *a, **k: pytest.fail("힌트에서 일반 지식 호출"))
+
+    def fake(question, extra="", hint=False):
+        seen.update(extra=extra, hint=hint)
+        return T.GeneralAnswer(answer="PostToolUse 훅은 도구 실행 뒤에 동작합니다.")
+    monkeypatch.setattr(search, "llm_general_answer", fake)
+    q = T.load_questions()[0]
+    T.set_pending("u", "s", q["id"])
+    ctx = T.ToolContext(user_id="u", session_id="s")
+    out = T.run_search_docs(ctx, "이 개념 설명해줘")
+    assert seen["hint"] is True and q["stem_en"] in seen["extra"]
+    assert q["why_correct"] not in seen["extra"] and '"answer"' not in seen["extra"]
+    assert ctx.refusal_reason is None and out.startswith(search.P.HINT_LABEL) and search.P.GENERAL_LABEL in out
+    assert ctx.contexts == [] and ctx.tool_calls[-1]["args"]["answer_basis"] == "ai_general_knowledge"
+
+
+def test_general_hint_with_answer_mention_is_blocked(monkeypatch):
+    """일반 지식 힌트에 '정답은 B' 같은 표현이 섞이면 코드가 버리고 근거 부족으로 거절한다."""
+    monkeypatch.setattr(retriever, "search", lambda *a, **k: [])
+    monkeypatch.setattr(search, "llm_general_answer",
+                        lambda *a, **k: T.GeneralAnswer(answer="개념은 이렇습니다. 그래서 정답은 B입니다."))
     q = T.load_questions()[0]
     T.set_pending("u", "s", q["id"])
     ctx = T.ToolContext(user_id="u", session_id="s")
     T.run_search_docs(ctx, "이 개념 설명해줘")
-    assert ctx.refusal_reason == "근거 부족"
+    assert ctx.refusal_reason == "근거 부족" and ctx.tool_calls[-1]["args"].get("general_hint_blocked") is True
 
 
 def test_lexical_search_finds_exact_terms():

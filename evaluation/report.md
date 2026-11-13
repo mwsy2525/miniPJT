@@ -1,7 +1,7 @@
-# 평가 리포트 · 라운드 15
+# 평가 리포트 · 라운드 16
 
 - 모드: **live-bedrock**, 시드 1234, 웹 폴백 off, 실행마다 새 임시 DB
-- 실행 시각: 2026-11-13 09:25, 모델: global.anthropic.claude-sonnet-4-6
+- 실행 시각: 2026-11-13 11:35, 모델: global.anthropic.claude-sonnet-4-6
 
 ## 요약
 - 전체 통과: 20/20 (100%)
@@ -10,7 +10,7 @@
 - 과잉 거절(positive): 0
 - edge·guardrail forbidden 위반: 0
 - db_writes 일치율: edge·guardrail 100%, 전체 100%
-- 응답 시간 p95: 7.33s (기록만)
+- 응답 시간 p95: 6.49s (기록만)
 - RAG 지표(기록만): {'search_docs_answers': 2, 'with_sources': 2, 'avg_contexts': 3, 'note': '측정값만 기록(합격선 없음); context precision/recall은 N/A(정답 문맥 라벨 없음)'}
 - 합격 기준 충족: **True**
 
@@ -203,19 +203,14 @@ D. Define the error-handling pattern in CLAUDE.md, then process files in batches
 [AI 개념 힌트 · 정답을 알려 주지 않으며 채점과 무관합니다]
 질문의 의도(agentic loop 종료 시점)와 문제 맥락(서브에이전트 격리 컨텍스트)을 함께 설명합니다.
 
-**Agentic loop 종료 조건**
-- 태스크가 정상 완료되면 `success`로 끝납니다.
-- `maxTurns` 한도에 도달하면 `error_max_turns`로 종료됩니다.
-- `maxBudgetUsd` 한도에 도달하면 `error_max_budget_usd`로 종료됩니다.
-- 실행 중 오류(예: 요청 취소)가 발생하면 `error_during_execution`으로 종료됩니다.
+**Agentic loop 종료 조건** (Stop hook 기준):
+- 사용자가 요청한 모든 태스크가 완료되었을 때
+- 처리해야 할 에러가 없을 때
+- 추가 후속 작업이 필요 없을 때
 
-**Stop hook으로 종료 제어**
-- `Stop` / `SubagentStop` hook에서 `{"ok": true}`를 반환하면 종료를 허용하고, `{"ok": false, "reason": "..."}` 를 반환하면 Claude가 계속 작업합니다.
-- `decision: "block"` + `reason`을 반환해도 종료를 막을 수 있습니다.
-- stop hook이 연속 8회 continuation을 발생시키면 Claude Code가 강제로 턴을 종료합니다.
+Stop hook에서 `{"ok": true}`를 반환하면 루프가 종료되고, `{"ok": false, "reason": "..."}` 를 반환하면 Claude가 계속 작업합니다.
 
-**문제 속 핵심 개념**
-서브에이전트는 코디네이터의 대화 히스토리를 상속받지 않습니다. 따라서 웹 검색 결과를 합성 서브에이전트의 **프롬프트에 명시적으로 포함**시키지 않으면, 서브에이전트는 그 내용을 알 수 없습니다.
+**문제 맥락 관련 핵심 개념**: 서브에이전트는 코디네이터의 대화 히스토리를 상속받지 않습니다. 따라서 웹 검색 서브에이전트가 찾은 결과를 합성 서브에이전트가 사용하려면, 그 내용을 프롬프트에 명시적으로 포함시켜야 합니다. "Write a report on the topic."만 전달하면 검색 결과가 합성 서브에이전트의 컨텍스트에 존재하지 않습니다.
 
 참고 문서:
 - https://code.claude.com/docs/en/hooks
@@ -241,9 +236,9 @@ D. Define the error-handling pattern in CLAUDE.md, then process files in batches
 
 > "each subagent spends tokens of its own while it runs"
 
-라고 명시하여, 서브에이전트가 실행되는 동안 각자 토큰을 소비한다고 경고합니다. 이는 위임 **전에** 범위를 나누지 않으면 중복 작업으로 토큰이 낭비된다는 근거가 됩니다.
+라고 명시하여, 서브에이전트가 실행되는 동안 각자 토큰을 소비한다고 경고합니다. 이는 사후 중복 제거(A)가 이미 토큰을 낭비한 뒤의 조치임을 뒷받침합니다.
 
-따라서 코디네이터가 **위임 전에** 연구 범위를 겹치지 않게 분리하는 것(B)이 근본 해결책이며, 사후 중복 제거(A)는 이미 토큰을 쓴 뒤의 처리라 낭비를 막지 못합니다.
+따라서 **위임 전에 코디네이터가 연구 범위를 겹치지 않게 나누는 것(B)**이 문서가 암묵적으로 전제하는 올바른 설계 방식입니다.
 
 참고 문서:
 - https://code.claude.com/docs/en/sub-agents

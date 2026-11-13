@@ -45,26 +45,43 @@ def llm_answer(question: str, passages: list[str], mode: str, extra: str, oos_to
                          "passages": "\n---\n".join(passages)})
 
 
-def llm_general_answer(question: str, extra: str = "") -> GeneralAnswer:
-    """[LLM 4] 문서 근거가 없는 Claude·Anthropic 질문에 AI 일반 지식으로 답한다(LCEL 체인). 실패하면 unknown으로 본다."""
+def llm_general_answer(question: str, extra: str = "", hint: bool = False) -> GeneralAnswer:
+    """[LLM 4] 문서 근거가 없는 Claude·Anthropic 질문에 AI 일반 지식으로 답한다(LCEL 체인). 실패하면 unknown으로 본다.
+
+    hint면 채점 전 개념 힌트 규칙(정답 보기·보기 정오를 말하지 않음)을 더한다.
+    """
     try:
         facts = "\n".join(f"- {x}" for x in bank.load_domains().get("exam_facts", []))
+        rules = P.GENERAL_RULES + ([P.GENERAL_HINT_RULE] if hint else [])
         chain = P.GENERAL_PROMPT | llm.get_llm().with_structured_output(GeneralAnswer)
-        return chain.invoke({"rules": "\n".join(P.GENERAL_RULES), "question": question,
+        return chain.invoke({"rules": "\n".join(rules), "question": question,
                              "context": extra or "(없음)", "facts": facts or "(없음)"})
     except Exception:
         return GeneralAnswer(unknown=True)
 
 
+# 보기 알파벳 뒤에 한글이 바로 붙어도("정답은 B입니다") 잡도록 \b 대신 영숫자만 경계로 본다
+_ANSWER_LEAK = re.compile(r"정답\s*(?:은|는|이|:)?\s*\(?[A-D](?![A-Za-z0-9])"
+                          r"|(?<![A-Za-z0-9])[A-D]\)?\s*(?:번|보기)?\s*(?:이|가)\s*정답"
+                          r"|correct (?:answer|option) is\s*\(?[A-D](?![A-Za-z0-9])", re.I)
+
+
 def _general_fallback(ctx: ToolContext, question: str, mode: str, extra: str) -> str | None:
-    """문서 근거가 없을 때 AI 일반 지식으로 답한다. 채점 전 힌트에서는 쓰지 않고, 모르면 None을 돌려준다."""
-    if mode == "hint":
-        return None
-    g = llm_general_answer(question, extra)
+    """문서 근거가 없을 때 AI 일반 지식으로 답한다. 모르면 None을 돌려준다.
+
+    채점 전 힌트에서도 쓰되, 정답 키 없이(대기 문제의 영어 지문·보기·의도만) 개념만 설명하게 하고,
+    답변에 정답 보기를 가리키는 표현이 있으면 코드가 버린다(정답 유출 방지).
+    """
+    hint = mode == "hint"
+    g = llm_general_answer(question, extra, hint=hint)
     if g.unknown or not g.answer.strip():
         return None
+    if hint and _ANSWER_LEAK.search(g.answer):
+        ctx.tool_calls[-1]["args"]["general_hint_blocked"] = True  # 정답 표현이 섞인 힌트는 내보내지 않는다
+        return None
     ctx.tool_calls[-1]["args"]["answer_basis"] = "ai_general_knowledge"  # trace에 근거 종류를 남긴다
-    return ctx.finish(P.GENERAL_LABEL + "\n" + g.answer)
+    label = (P.HINT_LABEL + "\n" + P.GENERAL_LABEL) if hint else P.GENERAL_LABEL
+    return ctx.finish(label + "\n" + g.answer)
 
 
 _CHOICE_TOKEN = re.compile(r"(?<![A-Za-z0-9_])[A-D](?![A-Za-z0-9_])")
