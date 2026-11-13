@@ -62,10 +62,15 @@ uv run python evaluation/run_eval.py --offline # 가짜 모델로 평가 스크�
 # 6. MCP 서버(stdio)
 uv run python -m src.api.mcp_server
 
-# 7. Docker (GitHub Actions에서 빌드와 컨테이너 기동을 확인: .github/workflows/docker-build.yml)
+# 7. Docker
 docker build -t ccarf-mock-exam .
-docker run --rm -p 8000:8000 --env-file .env ccarf-mock-exam
+docker run --rm -p 8000:8000 --env-file .env ccarf-mock-exam   # AI 질문까지 쓰려면 .env 필요
+docker run --rm -p 8000:8000 ccarf-mock-exam                   # .env 없이: 화면과 출제·채점·진도만 동작
 ```
+- Docker 확인 내역
+  - GitHub Actions(`.github/workflows/docker-build.yml`)가 이미지를 빌드하고, 자격증명 없이 컨테이너를 띄워 화면과 출제·채점·진도 경로를 자동으로 확인한다.
+  - GitHub Codespaces에서 위 명령으로 이미지를 빌드해 컨테이너를 띄우고, 브라우저에서 시험 화면이 열리는 것을 직접 확인했다.
+- Docker가 없는 PC에서는 GitHub Codespaces로 띄워 볼 수 있다: 저장소의 `Code` → `Codespaces` → `Create codespace on main` → 터미널에서 위 `docker build`, `docker run` 실행 → "Open in Browser".
 - 처음 문서 검색을 할 때 `data/chroma/`에 인덱스를 만든다(Bedrock 임베딩 호출).
 - 개발에 쓴 모델은 Bedrock의 Claude Sonnet 4.6(답변), Claude Haiku 4.5(검색어 변환), Titan Text Embeddings V2다.
 
@@ -112,7 +117,7 @@ docker run --rm -p 8000:8000 --env-file .env ccarf-mock-exam
   - 문제 은행 검수는 근거 구절 대조까지는 했지만, 문항 내용을 사람이 하나씩 읽고 승인한 것은 아니다(일괄 승인).
   - 인증이 없어 user_id를 그대로 믿는다. 공개 운영 전에 로그인과 호출 제한이 필요하다.
   - 평가 세트가 20문항이고 고정 시드 1회 실행이라, 모델의 흔들림을 충분히 보지 못한다.
-  - Docker 이미지는 GitHub Actions에서 빌드하고, 자격증명 없이 띄워 화면과 출제·채점·진도 경로만 확인했다. 컨테이너 안에서 Bedrock을 쓰는 경로(`/query`)는 확인하지 않았다.
+  - Docker 컨테이너에서는 화면과 출제·채점·진도 경로까지 확인했다(GitHub Actions 자동 확인, Codespaces 직접 확인). 컨테이너 안에서 Bedrock을 쓰는 경로(`/query`)는 확인하지 않았다.
 
 ## 핵심 코드 위치
 - `src/agent.py:5` — 진입점(`uvicorn src.agent:app`). 메인 에이전트 구현은 `src/orchestration/service.py:110`(`run_query`), `:122`(`create_agent` 구성), `:39`(ID별 도구 목록), `:89`(채점 전 사전 거절)
