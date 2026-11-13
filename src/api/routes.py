@@ -11,7 +11,7 @@ from src.grading import service as grading_service
 from src.orchestration import service as orchestration
 from src.progress import service as progress_service
 from src.quiz import service as quiz_service
-from src.shared.config import ROOT
+from src.shared.config import ROOT, env
 from src.shared.context import ToolContext
 
 app = FastAPI(title="CCAR-F 모의시험 Agent")
@@ -26,7 +26,12 @@ def index() -> FileResponse:
 
 @app.post("/query", response_model=QueryResponse)
 def query(req: QueryRequest) -> dict[str, Any]:
-    """POST /query: question(필수), user_id?, session_id? → {answer, contexts, trace}."""
+    """POST /query: question(필수), user_id?, session_id? → {answer, contexts, trace}.
+
+    모델 설정(.env BEDROCK_MODEL_ID)이 없으면 Bedrock을 부르지 않고 503으로 원인을 알린다(버튼 경로는 그대로 동작).
+    """
+    if not env("BEDROCK_MODEL_ID").strip():
+        raise HTTPException(status_code=503, detail="ai_not_configured: BEDROCK_MODEL_ID와 AWS 자격증명(.env)이 없어 AI 질문을 처리할 수 없습니다.")
     try:
         return orchestration.run_query(req.question, req.user_id, req.session_id)
     except HTTPException:

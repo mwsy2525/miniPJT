@@ -200,7 +200,8 @@ async function api(path, extra) {
     const r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user_id: uid, session_id: sessionId, ...extra }) });
     if (!r.ok) {
-      showError(r.status === 502 ? "모델 서버 응답에 실패했습니다. 잠시 뒤 다시 시도해 주세요. (502)" : `요청을 처리하지 못했습니다. (${r.status})`);
+      showError(r.status === 503 ? "AI 설정(.env의 모델 ID와 AWS 자격증명)이 없어 AI 질문을 쓸 수 없습니다. 출제·채점·진도는 그대로 쓸 수 있습니다. (503)"
+        : r.status === 502 ? "모델 서버 응답에 실패했습니다. 잠시 뒤 다시 시도해 주세요. (502)" : `요청을 처리하지 못했습니다. (${r.status})`);
       return null;
     }
     const d = await r.json();

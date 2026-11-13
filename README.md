@@ -64,11 +64,14 @@ uv run python -m src.api.mcp_server
 
 # 7. Docker
 docker build -t ccarf-mock-exam .
-docker run --rm -p 8000:8000 --env-file .env ccarf-mock-exam   # AI 질문까지 쓰려면 .env 필요
-docker run --rm -p 8000:8000 ccarf-mock-exam                   # .env 없이: 화면과 출제·채점·진도만 동작
+docker run --rm -p 8000:8000 -v ccarf-state:/app/state --env-file .env ccarf-mock-exam   # AI 질문까지
+docker run --rm -p 8000:8000 -v ccarf-state:/app/state ccarf-mock-exam                   # .env 없이: 출제·채점·진도만
 ```
+- `-v ccarf-state:/app/state`는 진도 DB, 검색 인덱스, 트레이스를 이름 있는 볼륨에 둔다. 컨테이너를 다시 띄워도 진도가 남고 검색 인덱스를 다시 만들지 않는다. 빼면 컨테이너를 지울 때 함께 사라진다.
+- `.env` 없이 AI 질문을 보내면 화면에 "AI 설정이 없다"는 안내가 나온다(HTTP 503). 출제·채점·진도는 그대로 쓸 수 있다.
+- 처음 AI 질문을 할 때 볼륨에 검색 인덱스를 만들어 몇 분 걸린다(Bedrock 임베딩 호출).
 - Docker 확인 내역
-  - GitHub Actions(`.github/workflows/docker-build.yml`)가 이미지를 빌드하고, 자격증명 없이 컨테이너를 띄워 화면과 출제·채점·진도 경로를 자동으로 확인한다.
+  - GitHub Actions(`.github/workflows/docker-build.yml`)가 이미지를 빌드하고, 자격증명 없이 컨테이너를 띄워 화면과 출제·채점·진도 경로, AI 설정 없음 안내(503), 컨테이너를 다시 띄운 뒤 진도 유지를 자동으로 확인한다.
   - GitHub Codespaces에서 위 명령으로 이미지를 빌드해 컨테이너를 띄우고, 브라우저에서 시험 화면이 열리는 것을 직접 확인했다.
 - Docker가 없는 PC에서는 GitHub Codespaces로 띄워 볼 수 있다: 저장소의 `Code` → `Codespaces` → `Create codespace on main` → 터미널에서 위 `docker build`, `docker run` 실행 → "Open in Browser".
 - 처음 문서 검색을 할 때 `data/chroma/`에 인덱스를 만든다(Bedrock 임베딩 호출).

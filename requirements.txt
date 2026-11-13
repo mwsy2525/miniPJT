@@ -1,12 +1,13 @@
-langchain>=1.0
-langgraph
-langchain-aws
-langchain-chroma
-chromadb
-fastapi
-uvicorn
-httpx
-pyyaml
-python-dotenv
-pytest
-mcp
+# uv.lock과 같은 버전으로 고정한 직접 의존성. 전체 잠금은 uv.lock을 쓴다(uv sync).
+langchain==1.5.0
+langgraph==1.2.20
+langchain-aws==1.9.3
+langchain-chroma==1.1.0
+chromadb==1.5.9
+fastapi==0.162.5
+uvicorn==0.54.0
+httpx==0.28.1
+pyyaml==6.0.3
+python-dotenv==1.2.4
+pytest==9.2.0
+mcp==2.3.0

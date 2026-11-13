@@ -11,3 +11,4 @@ def _offline_defaults(monkeypatch, tmp_path):
     monkeypatch.setenv("TRACE_LOG_DIR", str(tmp_path / "traces"))  # 테스트 트레이스는 임시 폴더에만 남긴다
     monkeypatch.setenv("LANGSMITH_TRACING", "false")  # 테스트는 LangSmith로 아무것도 보내지 않는다
     monkeypatch.delenv("FAST_MODEL_ID", raising=False)  # 빠른 모델도 get_llm mock을 거치게 한다
+    monkeypatch.setenv("BEDROCK_MODEL_ID", "test-model")  # .env가 없는 환경에서도 /query 테스트가 돌게 한다(LLM은 mock)

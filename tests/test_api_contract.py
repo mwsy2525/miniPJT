@@ -193,3 +193,12 @@ def test_query_writes_trace_record(client, tmp_path):
     assert rec["route"] == "/query" and rec["tool_calls"][0]["name"] == "generate_quiz" and rec["db_writes"] == 1
     assert any(s["kind"] == "tool" and s["name"] == "generate_quiz" for s in rec["spans"])
     assert any(s["kind"] == "llm" for s in rec["spans"]) and rec["latency_ms"] >= 0
+
+
+def test_query_without_model_config_returns_503(client, monkeypatch):
+    """모델 설정이 없으면 /query는 Bedrock을 부르지 않고 503으로 원인을 알린다. 버튼 경로는 그대로 동작한다."""
+    monkeypatch.setenv("BEDROCK_MODEL_ID", "")
+    monkeypatch.setattr(orch, "get_agent_llm", lambda: pytest.fail("LLM 호출 발생"))
+    r = client.post("/query", json={"question": "MCP가 뭐야?"})
+    assert r.status_code == 503 and "ai_not_configured" in r.json()["detail"]
+    assert client.post("/quiz", json={"user_id": "u", "session_id": "s"}).status_code == 200

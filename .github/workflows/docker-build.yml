@@ -19,7 +19,7 @@ jobs:
 
       - name: Run container
         run: |
-          docker run -d --name app -p 8000:8000 ccarf-mock-exam
+          docker run -d --name app -p 8000:8000 -v ccarf-state:/app/state ccarf-mock-exam
           for i in $(seq 1 30); do
             curl -fs -o /dev/null http://127.0.0.1:8000/ && break
             sleep 2
@@ -40,6 +40,19 @@ jobs:
           echo "$prog" | python3 -c "import json,sys; r=json.load(sys.stdin); assert r['trace']['tool_calls'][0]['name']=='get_progress'; print('progress ok')"
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/query -H 'Content-Type: application/json' -d '{"question":""}')" = "422"
           echo "validation ok"
+          # 모델 설정 없이 AI 질문을 보내면 502가 아니라 원인을 알리는 503
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8000/query -H 'Content-Type: application/json' -d '{"question":"MCP가 뭐야?"}')" = "503"
+          echo "ai-not-configured ok"
+
+      - name: Progress survives a container restart (volume)
+        run: |
+          set -e
+          docker rm -f app
+          docker run -d --name app -p 8000:8000 -v ccarf-state:/app/state ccarf-mock-exam
+          for i in $(seq 1 30); do curl -fs -o /dev/null http://127.0.0.1:8000/ && break; sleep 2; done
+          prog=$(curl -fs -X POST http://127.0.0.1:8000/progress -H 'Content-Type: application/json' -d '{"user_id":"ci"}')
+          echo "$prog" | python3 -c "import json,re,sys; a=json.load(sys.stdin)['answer']; assert re.search(r'\| 1 \| [01] \| ', a), a[:400]; print('progress kept after restart')"
+          docker exec app ls -la /app/state
 
       - name: Container logs on failure
         if: failure()
