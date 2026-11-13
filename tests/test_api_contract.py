@@ -202,3 +202,29 @@ def test_query_without_model_config_returns_503(client, monkeypatch):
     r = client.post("/query", json={"question": "MCP가 뭐야?"})
     assert r.status_code == 503 and "ai_not_configured" in r.json()["detail"]
     assert client.post("/quiz", json={"user_id": "u", "session_id": "s"}).status_code == 200
+
+
+def test_pii_is_masked_before_model_and_in_traces(client, monkeypatch, tmp_path):
+    """이메일·휴대전화 번호는 모델에 가기 전에 가려지고, 트레이스 파일에도 가린 값만 남는다."""
+    seen: list[str] = []
+
+    class Recorder(ScriptedModel):
+        def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+            seen.extend(m.content for m in messages if m.type == "human")
+            return super()._generate(messages, stop, run_manager, **kwargs)
+
+    monkeypatch.setattr(orch, "get_agent_llm", lambda: Recorder())
+    r = post(client, question="내 진도 보여줘. 결과는 minsu@example.com 이나 010-1234-5678 로", user_id="u", session_id="s")
+    assert r["trace"]["tool_calls"][0]["name"] == "get_progress"
+    assert seen and all("minsu@example.com" not in t and "010-1234-5678" not in t for t in seen)
+    assert any("[REDACTED_EMAIL]" in t for t in seen)
+    rec = (tmp_path / "traces").glob("*.jsonl").__next__().read_text(encoding="utf-8")
+    assert "minsu@example.com" not in rec and "010-1234-5678" not in rec and "[REDACTED_PHONE]" in rec
+
+
+def test_pii_mask_rules():
+    """가림 규칙: 이메일·휴대전화·카드 번호는 가리고, 문항 ID나 일반 숫자는 건드리지 않는다."""
+    from src.shared import pii
+    assert pii.mask("a.b@x.co 010 9876 5432") == "[REDACTED_EMAIL] [REDACTED_PHONE]"
+    assert pii.mask("카드 4111 1111 1111 1111") == "카드 [REDACTED_CREDIT_CARD]"
+    assert pii.mask("q-d2-001 문제, 2026-11-13, 60문항") == "q-d2-001 문제, 2026-11-13, 60문항"

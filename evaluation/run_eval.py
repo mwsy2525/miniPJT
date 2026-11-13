@@ -331,14 +331,14 @@ def next_round() -> int:
 
 
 def write_reports(summary: dict[str, Any], res: dict[str, Any], round_no: int | None = None,
-                  as_round2: bool = False) -> None:
+                  as_round2: bool = False, name: str = "report") -> None:
     """report.json과 report.md(최신 결과)를 쓴다.
 
     round_no가 있으면 같은 내용을 history/run{NN}_report.md로 남긴다(실측 회차 기록).
     as_round2면 제출용 2차 자체 평가 리포트(round2_report.md)도 이 결과로 바꾼다.
     round1_report.md(1차)는 이 스크립트가 건드리지 않는다.
     """
-    (EVAL_DIR / "report.json").write_text(
+    (EVAL_DIR / f"{name}.json").write_text(
         json.dumps({"summary": summary, "results": res["results"]}, ensure_ascii=False, indent=2), encoding="utf-8")
     L = ["# 평가 리포트" + (f" · 라운드 {round_no}" if round_no else ""), "",
          f"- 모드: **{summary['mode']}**, 시드 {SEED}, 웹 폴백 off, 실행마다 새 임시 DB"]
@@ -364,7 +364,7 @@ def write_reports(summary: dict[str, Any], res: dict[str, Any], round_no: int | 
     for r in res["results"]:
         L += [f"### {r['id']} ({r['category']})", f"- 입력: {r['input']}", f"- expected_traits: {r['expected_traits']}",
               "- 답변:", "", "```", r["answer"][:1500], "```", ""]
-    (EVAL_DIR / "report.md").write_text("\n".join(L), encoding="utf-8")
+    (EVAL_DIR / f"{name}.md").write_text("\n".join(L), encoding="utf-8")
     if round_no:
         hist = EVAL_DIR / "history"
         hist.mkdir(exist_ok=True)
@@ -396,7 +396,11 @@ def main() -> int:
     res = run(load_rows(Path(args.csv)))
     summary = summarize(res, args.offline)
     # 회차 기록은 실측만 남긴다
-    write_reports(summary, res, None if args.offline else next_round(), as_round2=args.as_round2 and not args.offline)
+    if Path(args.csv).resolve() != (EVAL_DIR / "test_queries.csv").resolve():
+        # 보강 세트 등 다른 문항 파일은 별도 리포트로만 쓴다(제출용 리포트·회차 기록은 20문항 기준 세트만)
+        write_reports(summary, res, name=Path(args.csv).stem.replace("_queries", "") + "_report")
+    else:
+        write_reports(summary, res, None if args.offline else next_round(), as_round2=args.as_round2 and not args.offline)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     return 0 if summary["meets_thresholds"] else 1
 

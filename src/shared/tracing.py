@@ -13,6 +13,7 @@ from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 
+from src.shared import pii
 from src.shared.config import ROOT, env as _env
 
 
@@ -86,8 +87,10 @@ def write(route: str, question: str | None, response: dict[str, Any] | None, rec
     trace = (response or {}).get("trace") or {}
     record = {
         "trace_id": uuid.uuid4().hex, "ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "route": route,
-        "model": _env("BEDROCK_MODEL_ID"), "question": question, "latency_ms": round((time.time() - t0) * 1000),
-        "tool_calls": trace.get("tool_calls", []), "problem_id": trace.get("problem_id"),
+        "model": _env("BEDROCK_MODEL_ID"), "question": pii.mask(question), "latency_ms": round((time.time() - t0) * 1000),
+        "tool_calls": [{"name": c.get("name"), "args": {k: pii.mask(v) if isinstance(v, str) else v
+                                                         for k, v in (c.get("args") or {}).items()}}
+                       for c in trace.get("tool_calls", [])], "problem_id": trace.get("problem_id"),
         "refusal_reason": trace.get("refusal_reason"), "db_writes": trace.get("db_writes"),
         "n_contexts": len((response or {}).get("contexts") or []), "spans": recorder.spans if recorder else [],
         "error": error,

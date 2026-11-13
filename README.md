@@ -9,7 +9,7 @@
 - Day 3: ReAct (도구 자율 선택) — `create_agent`에 도구 4개(`search_docs`, `generate_quiz`, `grade_answer`, `get_progress`)를 붙여 모델이 고른다. ID 조합에 허용되지 않은 도구는 아예 넘기지 않는다.
 - Day 4: MCP 서버 연동 — 도구 4개를 MCP 서버(`src/api/mcp_server.py`, stdio)로 노출한다. 규칙과 응답 형태는 HTTP 경로와 같다.
 - Day 5: 가드레일 — 프롬프트 인젝션, 실제 시험 유출 문제 요청, 채점 전 정답·번역 요청, 타인 진도 요청을 고정 사유 코드 10개 중 하나로 거절한다. 채점 전 정답 요청은 LLM을 부르기 전에 코드가 먼저 막는다.
-- Day 5: 미들웨어 — 모델 호출 재시도, 한 요청의 모델 호출 4회·도구 호출 2회 상한을 `create_agent` 미들웨어로 건다.
+- Day 5: 미들웨어 — 개인정보 가림(`PIIMiddleware`: 이메일·카드 번호·휴대전화 번호), 모델 호출 재시도, 한 요청의 모델 호출 4회·도구 호출 2회 상한을 `create_agent` 미들웨어로 건다. 같은 가림 규칙을 트레이스 기록에도 쓴다.
 - Day 7: Observability · Trace — 요청마다 LLM·도구 호출 단계(시간, 모델, 토큰 수)를 `data/traces/`에 JSONL로 남긴다. `.env`에 LangSmith 설정을 넣으면 LangSmith에도 기록된다.
 - Day 7: 평가 — 인-아웃 세트 20문항으로 통과율, 도구 호출 정확도, 거절 정확도, DB 쓰기 일치율을 자동 판정하고 라운드별 리포트를 남긴다. 문서 Q&A는 RAGAS 네 지표를 따로 쟀다(`evaluation/run_ragas.py`).
 
@@ -107,6 +107,8 @@ docker run --rm -p 8000:8000 -v ccarf-state:/app/state ccarf-mock-exam          
 실측은 모두 16번 돌렸다. 1차는 1회차, 2차는 16회차(하이브리드 검색·힌트 일반 지식 허용 후) 결과이고, 모든 회차의 리포트는 `evaluation/history/run{NN}_report.md`에 있다. 1~4회차는 Claude Sonnet 4.5, 7회차부터는 Sonnet 4.6이다. 5·6회차는 Bedrock 일일 토큰 한도로 HTTP 502가 섞여 결과가 유효하지 않고, 8회차는 원본 리포트를 잃어 요약만 남겼다. 1차와 2차 사이에 문제 은행이 10문항에서 43문항으로 늘었고 모델도 바뀌었으므로, 두 수치는 같은 조건의 비교가 아니다.
 
 합격 기준(SERVICE.md 5번)과 16회차 결과: 전체 통과 100%(기준 85%), 도구 호출 정확도 100%(90%), negative·guardrail 8/8(100%), 정상 질문 거절 0건(0건), edge 금지어 위반 0건, DB 쓰기 횟수 일치 100%.
+
+보강 세트(`evaluation/extra_queries.csv`, 9문항, `evaluation/extra_report.md`): 9 / 9 통과. 기준 20문항이 다루지 않는 경우를 따로 쟀다. 영어 입력(출제·문서 질문·답안·범위 밖), 정답을 돌려 묻는 질문 2개("C 말고 나머지는 다 틀린 거지?" 등), 인젝션만 담은 영어 입력, 데이터 삭제 요청, 이메일이 든 진도 요청(답변에 이메일을 되풀이하지 않음). 1차·2차 비교의 기준을 바꾸지 않으려고 기준 세트와 분리했다(`run_eval.py --csv evaluation/extra_queries.csv`).
 
 ## 트라이앤에러 회고
 - 시도했지만 실패한 접근 · 왜 실패했는가

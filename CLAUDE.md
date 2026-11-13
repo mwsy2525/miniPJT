@@ -11,7 +11,7 @@
 - 진도와 세션 상태는 SQLite `data/progress.db`에 저장한다.
 - HTTP 서버는 FastAPI를 쓴다.
 - `search_docs`의 답변 생성은 LCEL 체인(`ChatPromptTemplate | 모델.with_structured_output(Pydantic)`)으로 만든다.
-- 에이전트에는 미들웨어를 붙인다: 모델 호출 재시도(실패하면 오류를 올려 502), 한 요청의 모델 호출 4회·도구 호출 2회 상한.
+- 에이전트에는 미들웨어를 붙인다: 개인정보 가림(이메일·카드 번호·휴대전화, `src/shared/pii.py`), 모델 호출 재시도(실패하면 오류를 올려 502), 한 요청의 모델 호출 4회·도구 호출 2회 상한. 트레이스 기록에도 같은 가림 규칙을 쓴다.
 - `POST /query` 요청마다 LLM·도구 호출 단계(시간, 모델, 토큰 수)를 `data/traces/날짜.jsonl`에 한 줄로 남긴다(.env `TRACE_LOG_ENABLED`, `TRACE_LOG_DIR`). API 키는 필요 없다. LangSmith는 .env에 `LANGSMITH_TRACING=true`와 키를 넣으면 함께 켜진다. 트레이스 폴더는 git에 올리지 않는다.
 - 도구 4개는 MCP 서버(`python -m src.api.mcp_server`, stdio)로도 노출한다. 규칙과 응답 형태는 `POST /query`와 같다.
 
@@ -120,6 +120,7 @@ web/index.html        시험지형 웹 화면 (GET /). 버튼은 POST /quiz·/gr
 - 거절은 `trace.refusal_reason`이 null이 아닌 것이다.
 - `expected_traits`는 리포트에 답변과 나란히 기록만 하고 판정에는 넣지 않는다.
 - 평가셋에 없는 거절 사유(user_id 불일치, 출제 문항 없음)와 웹 폴백 경로는 `tests/`의 단위 테스트에서 mock으로 확인한다.
+- 기준 20문항(`test_queries.csv`)은 1차·2차 비교의 기준이라 바꾸지 않는다. 추가로 확인할 경우는 보강 세트(`extra_queries.csv`)에 넣고 `--csv`로 따로 채점한다(`extra_report.md`, 회차 기록·제출 리포트에 섞지 않음).
 
 ## 파일 배치 규칙 (`src/`)
 - 폴더는 기술 역할(utils, models)이 아니라 도메인(기능) 단위로 나눈다. 도메인 폴더 안에서는 실행 로직은 `service.py`, LLM 프롬프트와 고정 문구는 `prompts.py`, 입출력 스키마(pydantic)는 `schemas.py`에 둔다. 없는 것은 만들지 않는다.

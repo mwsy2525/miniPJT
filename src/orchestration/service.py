@@ -21,7 +21,7 @@ from src.quiz.schemas import QuizToolInput
 from src.search import service as search
 from src.search.schemas import SearchToolInput
 from src.sessions import service as sessions
-from src.shared import llm, tracing
+from src.shared import llm, pii, tracing
 from src.shared.context import REFUSAL_CODES, ToolContext
 
 TOOL_NAMES = ("search_docs", "generate_quiz", "grade_answer", "get_progress")
@@ -99,8 +99,8 @@ def _pre_grading_guard(ctx: ToolContext, question: str) -> bool:
 
 
 def agent_middleware() -> list:
-    """에이전트 미들웨어: 모델 호출 일시 오류 재시도, 한 요청의 모델·도구 호출 횟수 상한(폭주 방지)."""
-    return [
+    """에이전트 미들웨어: 개인정보 가림, 모델 호출 일시 오류 재시도, 한 요청의 모델·도구 호출 횟수 상한(폭주 방지)."""
+    return pii.agent_middleware() + [
         ModelRetryMiddleware(max_retries=1, on_failure="error"),  # 실패하면 숨기지 않고 올려 502로 응답한다
         ModelCallLimitMiddleware(run_limit=4, exit_behavior="end"),
         ToolCallLimitMiddleware(run_limit=2, exit_behavior="end"),
